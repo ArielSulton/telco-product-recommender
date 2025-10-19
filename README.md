@@ -1,4 +1,4 @@
-# ASAH Capstone Project - Telco Product Recommender
+# ASAH Capstone Project - Telco Product Recommendation Offer based on Customer Behaviour
 
 Sistem rekomendasi produk telekomunikasi berbasis AI untuk meningkatkan personalisasi dan konversi penjualan.
 
