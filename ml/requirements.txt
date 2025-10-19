@@ -1,0 +1,33 @@
+# Core ML Libraries
+scikit-learn==1.3.2
+lightfm==1.17
+xgboost==2.0.3
+numpy==1.24.3
+pandas==2.1.3
+
+# Explainability
+shap==0.43.0
+
+# MLflow for Experiment Tracking
+mlflow==2.9.2
+
+# Visualization
+matplotlib==3.8.2
+seaborn==0.13.0
+
+# Data Processing
+scipy==1.11.4
+
+# Jupyter for Notebooks
+jupyter==1.0.0
+notebook==7.0.6
+ipykernel==6.27.1
+
+# Database Connection
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+
+# Utilities
+python-dotenv==1.0.0
+tqdm==4.66.1
+joblib==1.3.2

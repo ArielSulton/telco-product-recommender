@@ -1,0 +1,233 @@
+# Telco Product Recommender - Git Ignore Configuration
+
+# ================================
+# Python
+# ================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# mypy
+.mypy_cache/
+.dmyp.json
+dmypy.json
+
+# ================================
+# Node.js / Frontend
+# ================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+.next/
+out/README.md
+
+# Environment variables
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs
+*.log
+
+# ================================
+# Machine Learning
+# ================================
+# Data files (large datasets)
+ml/data/raw/*.csv
+ml/data/raw/*.parquet
+ml/data/processed/*.csv
+ml/data/processed/*.parquet
+ml/data/features/*.csv
+ml/data/features/*.parquet
+
+# Model artifacts
+*.pkl
+*.joblib
+*.h5
+*.hdf5
+*.onnx
+backend/app/ml/models/**/*.pkl
+backend/app/ml/models/**/*.joblib
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# Experiment tracking
+wandb/
+
+# ================================
+# Database
+# ================================
+*.db
+*.sqlite
+*.sqlite3
+
+# PostgreSQL dumps
+*.dump
+*.sql.gz
+
+# ================================
+# Docker
+# ================================
+# Ignore data volumes (use named volumes instead)
+postgres_data/
+redis_data/
+grafana_data/
+prometheus_data/
+
+# ================================
+# Sensitive / Credentials
+# ================================
+.env
+.env.production
+.env.staging
+*.pem
+*.key
+*.crt
+secrets/
+credentials.json
+
+# SSH keys
+id_rsa
+id_rsa.pub
+
+# ================================
+# OS-specific
+# ================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+.directory
+
+# ================================
+# IDEs
+# ================================
+.cursorignore
+.cursorrules
+.codeiumignore
+.windsurf/
+.cursor/
+.vscode/
+.claude/
+.idea/
+*.swp
+*.swo
+*~
+
+# ================================
+# Testing
+# ================================
+coverage/
+.coverage.*
+*.cover
+.hypothesis/
+
+# E2E test results
+tests/e2e/screenshots/
+tests/e2e/videos/
+
+# ================================
+# Monitoring & Logs
+# ================================
+# Logs
+logs/
+*.log
+
+# Prometheus data
+prometheus_data/
+
+# Grafana data
+grafana_data/
+
+# ================================
+# Temporary Files
+# ================================
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# ================================
+# Build artifacts
+# ================================
+*.tar
+*.zip
+*.gz
+
+# ================================
+# Documentation builds
+# ================================
+docs/release/
+docs/_build/
+site/
+
+# ================================
+# Other files
+# ================================
+!.gitkeep
+Project_Plan_Telco_Recommender.txt
+IMPLEMENTATION_FLOW.md
