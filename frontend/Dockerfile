@@ -41,20 +41,23 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM nginx:alpine as production
+FROM node:18-alpine as production
 
-# Copy custom nginx config
-COPY --from=builder /app/nginx.conf /etc/nginx/conf.d/default.conf
+# Set working directory
+WORKDIR /app
 
-# Copy built assets
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Install serve package globally for serving static files
+RUN npm install -g serve
+
+# Copy built assets from builder stage
+COPY --from=builder /app/dist ./dist
 
 # Expose port
-EXPOSE 80
+EXPOSE 5173
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --quiet --tries=1 --spider http://localhost/ || exit 1
+    CMD wget --quiet --tries=1 --spider http://localhost:5173/health || exit 1
 
-# Run nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Serve static files
+CMD ["serve", "-s", "dist", "-l", "5173"]
