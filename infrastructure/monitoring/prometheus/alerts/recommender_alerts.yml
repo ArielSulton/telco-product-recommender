@@ -1,0 +1,254 @@
+# Prometheus Alert Rules for Telco Recommender System
+# ======================================================
+#
+# Critical alerts for production monitoring with actionable
+# thresholds and severity levels.
+
+groups:
+  - name: api_performance
+    interval: 30s
+    rules:
+      # High API Latency
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.95, rate(recommendation_request_duration_seconds_bucket[5m])) > 0.200
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API latency detected"
+          description: "p95 recommendation latency is {{ $value }}s (threshold: 200ms)"
+          runbook: "Check backend logs, Redis cache hit rate, database performance"
+
+      - alert: CriticalAPILatency
+        expr: histogram_quantile(0.95, rate(recommendation_request_duration_seconds_bucket[5m])) > 0.500
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "CRITICAL: API latency above 500ms"
+          description: "p95 recommendation latency is {{ $value }}s - user experience degraded"
+          runbook: "Immediate investigation required - check database, model loading, network"
+
+  - name: error_rates
+    interval: 1m
+    rules:
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.02
+        for: 3m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Error rate above 2%"
+          description: "{{ $value | humanizePercentage }} of requests failing"
+          runbook: "Check application logs, database connectivity, model availability"
+
+      - alert: CriticalErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.10
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "CRITICAL: Error rate above 10%"
+          description: "{{ $value | humanizePercentage }} of requests failing - service degraded"
+          runbook: "INCIDENT - Rollback recent deployment, check service health"
+
+  - name: ml_model_performance
+    interval: 5m
+    rules:
+      # Model Inference Failures
+      - alert: ModelInferenceFailures
+        expr: rate(model_inference_errors_total[10m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: ml
+        annotations:
+          summary: "Model inference failures detected"
+          description: "{{ $value }} model inference errors per second"
+          runbook: "Check MLflow model registry, model file integrity, memory usage"
+
+      # Recommendation Coverage Drop
+      - alert: LowRecommendationCoverage
+        expr: rate(recommendation_fallback_total[10m]) / rate(recommendation_requests_total[10m]) > 0.20
+        for: 10m
+        labels:
+          severity: warning
+          component: ml
+        annotations:
+          summary: "High fallback rate - recommendation coverage low"
+          description: "{{ $value | humanizePercentage }} of recommendations using fallback"
+          runbook: "Check collaborative filtering model, user feature availability, product catalog"
+
+  - name: data_quality
+    interval: 5m
+    rules:
+      # Cache Hit Rate Drop
+      - alert: LowCacheHitRate
+        expr: rate(cache_hits_total[10m]) / rate(cache_requests_total[10m]) < 0.50
+        for: 10m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis cache hit rate below 50%"
+          description: "Cache hit rate: {{ $value | humanizePercentage }}"
+          runbook: "Check Redis memory, TTL configuration, cache warming strategy"
+
+      # Data Staleness
+      - alert: StaleFeatures
+        expr: time() - feature_last_update_timestamp > 14400  # 4 hours
+        for: 10m
+        labels:
+          severity: warning
+          component: data
+        annotations:
+          summary: "User features not updated in 4+ hours"
+          description: "Last feature update: {{ $value | humanizeDuration }} ago"
+          runbook: "Check Airflow feature_engineering DAG, data ingestion pipeline"
+
+  - name: infrastructure
+    interval: 1m
+    rules:
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage at {{ $value | humanizePercentage }}"
+          runbook: "Check for resource-intensive operations, consider scaling"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes / 2147483648 > 0.85  # 85% of 2GB
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "Memory usage above 85%"
+          description: "Memory usage: {{ $value | humanize }}B"
+          runbook: "Check for memory leaks, model loading, consider scaling"
+
+      # Database Connection Pool Exhaustion
+      - alert: DatabaseConnectionPoolExhaustion
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.80
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "{{ $value | humanizePercentage }} of connections in use"
+          runbook: "Check for connection leaks, long-running queries, increase pool size"
+
+  - name: business_metrics
+    interval: 5m
+    rules:
+      # CTR Drop
+      - alert: CTRDropDetected
+        expr: |
+          (
+            rate(events_total{event_type="click"}[1h]) / rate(events_total{event_type="view"}[1h])
+          ) < 0.8 * (
+            rate(events_total{event_type="click"}[24h] offset 24h) / rate(events_total{event_type="view"}[24h] offset 24h)
+          )
+        for: 30m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "CTR dropped 20% compared to yesterday"
+          description: "Current CTR significantly lower than baseline"
+          runbook: "Review recent model changes, check recommendation quality, A/B test results"
+
+      # Conversion Rate Drop
+      - alert: ConversionRateDropDetected
+        expr: |
+          (
+            rate(events_total{event_type="subscribe"}[1h]) / rate(events_total{event_type="view"}[1h])
+          ) < 0.7 * (
+            rate(events_total{event_type="subscribe"}[24h] offset 24h) / rate(events_total{event_type="view"}[24h] offset 24h)
+          )
+        for: 1h
+        labels:
+          severity: critical
+          component: business
+        annotations:
+          summary: "Conversion rate dropped 30% compared to yesterday"
+          description: "Critical business metric degradation detected"
+          runbook: "URGENT - Review ranking model, product catalog, pricing, user experience"
+
+  - name: availability
+    interval: 1m
+    rules:
+      # Service Down
+      - alert: ServiceDown
+        expr: up{job="fastapi-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Backend service is down"
+          description: "FastAPI backend unreachable for 1+ minutes"
+          runbook: "INCIDENT - Check container status, restart service, review logs"
+
+      # Database Down
+      - alert: DatabaseDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "PostgreSQL database is down"
+          description: "Database unreachable - all services will fail"
+          runbook: "CRITICAL - Restore database, check backups, failover if needed"
+
+      # Redis Down
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis cache is down"
+          description: "Cache unavailable - system running in degraded mode with fallback"
+          runbook: "Restart Redis, check persistence, verify data integrity"
+
+  - name: model_retraining
+    interval: 1h
+    rules:
+      # Model Training Failure
+      - alert: ModelTrainingFailed
+        expr: airflow_dag_run_status{dag_id="model_retraining", state="failed"} > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: ml
+        annotations:
+          summary: "Model retraining DAG failed"
+          description: "Automated retraining failed - production models not updated"
+          runbook: "Check Airflow logs, data quality, MLflow connectivity"
+
+      # Data Drift Detected
+      - alert: DataDriftDetected
+        expr: data_drift_psi > 0.25
+        for: 10m
+        labels:
+          severity: warning
+          component: ml
+        annotations:
+          summary: "Significant data drift detected"
+          description: "PSI score {{ $value }} indicates distribution shift"
+          runbook: "Review feature distributions, consider immediate retraining"

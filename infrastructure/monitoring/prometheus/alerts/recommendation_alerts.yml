@@ -1,0 +1,147 @@
+# Prometheus Alert Rules for Recommender System
+# ==============================================
+
+groups:
+  - name: recommendation_performance
+    interval: 30s
+    rules:
+      # High Latency Alert
+      - alert: HighRecommendationLatency
+        expr: histogram_quantile(0.95, rate(recommendation_latency_seconds_bucket[5m])) > 0.15
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High recommendation latency detected"
+          description: "P95 latency is {{ $value | humanizeDuration }} (threshold: 150ms)"
+
+      # Critical Latency Alert
+      - alert: CriticalRecommendationLatency
+        expr: histogram_quantile(0.95, rate(recommendation_latency_seconds_bucket[5m])) > 0.30
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "CRITICAL: Recommendation latency extremely high"
+          description: "P95 latency is {{ $value | humanizeDuration }} (threshold: 300ms)"
+
+      # High Error Rate
+      - alert: HighRecommendationErrorRate
+        expr: rate(recommendation_errors_total[5m]) / rate(recommendation_requests_total[5m]) > 0.02
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High recommendation error rate"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 2%)"
+
+      # Critical Error Rate
+      - alert: CriticalRecommendationErrorRate
+        expr: rate(recommendation_errors_total[5m]) / rate(recommendation_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "CRITICAL: Very high recommendation error rate"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+  - name: model_performance
+    interval: 60s
+    rules:
+      # Low Cache Hit Rate
+      - alert: LowCacheHitRate
+        expr: rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) < 0.70
+        for: 10m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} (threshold: 70%)"
+
+      # Model Score Distribution Anomaly
+      - alert: AbnormalModelScores
+        expr: avg(recommendation_score_distribution) < 0.1 or avg(recommendation_score_distribution) > 0.9
+        for: 15m
+        labels:
+          severity: warning
+          component: ml
+        annotations:
+          summary: "Abnormal model score distribution"
+          description: "Average model score is {{ $value }} (expected: 0.1-0.9)"
+
+      # Event Tracking Failure
+      - alert: EventTrackingFailure
+        expr: rate(event_tracking_failures_total[5m]) / rate(event_tracking_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: tracking
+        annotations:
+          summary: "High event tracking failure rate"
+          description: "Failure rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+  - name: system_health
+    interval: 30s
+    rules:
+      # Database Connection Issues
+      - alert: DatabaseConnectionPoolExhausted
+        expr: pg_stat_activity_count > 45
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "Active connections: {{ $value }} (max: 50)"
+
+      # Redis Memory Usage
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Memory usage: {{ $value | humanizePercentage }}"
+
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) > 0.80
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage: {{ $value | humanizePercentage }}"
+
+  - name: business_metrics
+    interval: 120s
+    rules:
+      # Low Click-Through Rate
+      - alert: LowCTR
+        expr: rate(events_total{event_type="click"}[1h]) / rate(events_total{event_type="view"}[1h]) < 0.05
+        for: 30m
+        labels:
+          severity: info
+          component: business
+        annotations:
+          summary: "Click-through rate below target"
+          description: "CTR: {{ $value | humanizePercentage }} (target: 5%)"
+
+      # No Conversions
+      - alert: NoConversions
+        expr: rate(events_total{event_type="subscribe"}[1h]) == 0
+        for: 1h
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "No conversions in the last hour"
+          description: "Zero subscription events detected"

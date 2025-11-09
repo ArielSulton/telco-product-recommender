@@ -1,0 +1,17 @@
+# Data Simulator Service Dependencies
+# Sprint 1: Infrastructure & Streaming Foundation
+
+# Core dependencies
+pandas==2.1.3
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+
+# Scheduling
+apscheduler==3.10.4
+
+# Configuration
+python-dotenv==1.0.0
+pyyaml==6.0.1
+
+# Utilities
+python-dateutil==2.8.2

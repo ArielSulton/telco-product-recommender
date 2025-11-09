@@ -1,0 +1,62 @@
+# Data Simulator Configuration
+# Sprint 1: Infrastructure & Streaming Foundation
+
+simulation:
+  # Batch size for each ingestion cycle
+  batch_size: 1000
+
+  # Ingestion interval in hours
+  interval_hours: 4
+
+  # Start ingestion immediately on startup
+  start_immediately: true
+
+  # Replay mode: reset and re-ingest when all data is processed
+  replay_mode: false
+
+  # Use cron expression instead of interval
+  use_cron: false
+  cron_expression: "0 */4 * * *"  # Every 4 hours
+
+  # Time offset for realistic timestamps (hours)
+  time_offset_hours: 0
+
+database:
+  # Connection settings (overridden by environment variables)
+  host: postgres
+  port: 5432
+  database: telco_recommender
+  user: postgres
+  password: postgres
+
+  # Connection pool settings
+  pool_size: 5
+  max_overflow: 10
+  pool_pre_ping: true
+
+data_source:
+  # Path to CSV file
+  csv_path: /app/ml/data/raw/ac-01_telco_customer_behavior_mock_data.csv
+
+  # CSV encoding
+  encoding: utf-8
+
+  # Required columns validation
+  required_columns:
+    - customer_id
+    - plan_type
+    - monthly_spend
+    - target_offer
+
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+monitoring:
+  # Enable health check endpoint
+  health_check_enabled: true
+  health_check_port: 8001
+
+  # Metrics export
+  metrics_enabled: true
+  metrics_port: 9100

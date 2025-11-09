@@ -1,0 +1,54 @@
+{
+  "dashboard": {
+    "title": "ML Models Performance",
+    "uid": "ml-models",
+    "version": 1,
+    "timezone": "browser",
+    "editable": true,
+    "refresh": "1m",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Model Inference Latency by Stage",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(model_inference_duration_seconds_sum{stage='segmentation'}[5m]) / rate(model_inference_duration_seconds_count{stage='segmentation'}[5m])",
+            "legendFormat": "Segmentation (K-Means)"
+          },
+          {
+            "expr": "rate(model_inference_duration_seconds_sum{stage='collaborative'}[5m]) / rate(model_inference_duration_seconds_count{stage='collaborative'}[5m])",
+            "legendFormat": "Collaborative (LightFM)"
+          },
+          {
+            "expr": "rate(model_inference_duration_seconds_sum{stage='ranking'}[5m]) / rate(model_inference_duration_seconds_count{stage='ranking'}[5m])",
+            "legendFormat": "Ranking (XGBoost)"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "NDCG@5 Quality Metric",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "avg_over_time(model_ndcg_at_5[1h])",
+            "legendFormat": "NDCG@5 (Hourly Avg)"
+          }
+        ],
+        "yaxes": [
+          {
+            "min": 0,
+            "max": 1
+          }
+        ]
+      }
+    ]
+  }
+}

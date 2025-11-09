@@ -41,6 +41,33 @@ services:
       timeout: 5s
       retries: 5
 
+  # Data Streaming Simulator
+  data-simulator:
+    build:
+      context: ./services/data-simulator
+    container_name: telco-data-simulator-dev
+    environment:
+      - DATABASE_URL=postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@postgres:5432/${DATABASE_NAME:-telco_recommender}
+      - DATA_SOURCE_PATH=/app/ml/data/raw/ac-01_telco_customer_behavior_mock_data.csv
+      - BATCH_SIZE=${BATCH_SIZE:-1000}
+      - INGESTION_INTERVAL_HOURS=${INGESTION_INTERVAL_HOURS:-4}
+      - START_IMMEDIATELY=${START_IMMEDIATELY:-true}
+      - REPLAY_MODE=${REPLAY_MODE:-false}
+      - USE_CRON=${USE_CRON:-false}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ./ml/data/raw:/app/ml/data/raw:ro
+      - ./services/data-simulator:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - telco-network
+    restart: unless-stopped
+
   # Backend API (FastAPI)
   backend:
     build:
@@ -202,12 +229,15 @@ services:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@postgres:5432/airflow
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY:-}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     volumes:
       - ./infrastructure/airflow/dags:/opt/airflow/dags
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins
       - airflow_logs:/opt/airflow/logs
     depends_on:
       - airflow-init
+      - redis
     networks:
       - telco-network
     command: scheduler

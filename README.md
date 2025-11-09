@@ -1,5 +1,10 @@
 # ASAH Capstone Project - Telco Product Recommendation Offer based on Customer Behaviour
 
+![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen)
+![ML Pipeline](https://img.shields.io/badge/ML-LightFM%20%7C%20XGBoost-blue)
+![Backend](https://img.shields.io/badge/Backend-FastAPI-009688)
+![Frontend](https://img.shields.io/badge/Frontend-React%2018-61dafb)
+
 Sistem rekomendasi produk telekomunikasi berbasis AI untuk meningkatkan personalisasi dan konversi penjualan.
 
 ## 🎯 Overview
@@ -46,44 +51,40 @@ Hybrid recommendation system yang menggabungkan:
 
 ## 🚀 Quick Start
 
-### Prerequisites
-- Docker & Docker Compose
-- Node.js 18+ (for frontend development)
-- Python 3.10+ (for backend/ML development)
+**📖 For detailed setup instructions:**
+- **[QUICK_START.md](QUICK_START.md)** - Complete Dev & Prod setup guide
+- **[CHEAT_SHEET.md](CHEAT_SHEET.md)** - Quick command reference
 
-### Development Setup
+### Super Quick (Development)
+```bash
+# 1. Copy environment
+cp .env.example .env
 
-1. **Clone repository**
-   ```bash
-   git clone <repository-url>
-   cd ASAH-Capstone
-   ```
+# 2. Start everything
+docker compose -f compose.dev.yaml up -d
 
-2. **Setup environment**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
-
-3. **Start services**
-   ```bash
-   docker-compose -f compose.dev.yaml up -d
-   ```
-
-4. **Access applications**
-   - Frontend: http://localhost:5173
-   - Backend API: http://localhost:8000
-   - API Docs: http://localhost:8000/docs
-   - MLflow: http://localhost:5000
-   - Grafana: http://localhost:3000
+# 3. Wait 2-3 minutes, then access:
+# - Frontend: http://localhost:5173
+# - Backend: http://localhost:8000/docs
+# - Airflow: http://localhost:8080 (admin/admin)
+# - Grafana: http://localhost:3000 (admin/admin)
+```
 
 ## 📚 Documentation
 
-- [Implementation Flow](IMPLEMENTATION_FLOW.md) - Sprint-by-sprint development guide
-- [Backend Documentation](backend/README.md)
-- [Frontend Documentation](frontend/README.md)
-- [ML Pipeline Documentation](ml/README.md)
-- [Infrastructure Documentation](infrastructure/README.md)
+### Quick Reference
+- **[QUICK_START.md](QUICK_START.md)** - Dev & Prod setup guide
+- **[CHEAT_SHEET.md](CHEAT_SHEET.md)** - Command reference
+- **[IMPLEMENTATION_COMPLETE.md](IMPLEMENTATION_COMPLETE.md)** - Complete implementation summary
+
+### Detailed Guides
+- **[docs/](docs/)** - All documentation (organized)
+  - API Documentation
+  - Deployment Guide
+  - Monitoring Runbook
+  - Troubleshooting Guide
+  - Sprint Documentation (1-5)
+- **[tests/](tests/)** - All test files & testing guide
 
 ## 🎯 Target Metrics
 

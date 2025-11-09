@@ -1,91 +1,38 @@
-# Documentation - Telco Product Recommender
+# Documentation Index
 
-Comprehensive documentation for the Telco Product Recommendation system.
+Complete documentation for the Telco Product Recommender System.
 
-## Documentation Structure
+## 📚 Main Documentation
 
-```
-docs/
-├── api/              # API specifications
-├── architecture/     # System design & diagrams
-└── deployment/       # Deployment guides
-```
+### Quick Start
+- **PRODUCTION_QUICK_START.md** - 5-minute setup guide
 
-## Available Documentation
+### Operation Guides
+- **API_DOCUMENTATION.md** - Complete API reference with examples
+- **DEPLOYMENT_GUIDE.md** - Production deployment procedures
+- **MONITORING_RUNBOOK.md** - Monitoring setup and incident response
+- **TROUBLESHOOTING_GUIDE.md** - Common issues and solutions
 
-### API Documentation
-- `api/openapi.yaml` - OpenAPI 3.0 specification
-- Interactive docs available at `/docs` (Swagger UI)
-- Alternative docs at `/redoc` (ReDoc)
+## 🚀 Sprint Documentation
 
-### Architecture Documentation
-- `architecture/system_design.md` - Overall system architecture
-- `architecture/data_flow.md` - Data flow diagrams
-- `architecture/ui_design.md` - UI/UX wireframes and mockups
+Detailed implementation documentation for each sprint in `sprints/` folder:
 
-### Deployment Documentation
-- `deployment/production_checklist.md` - Pre-deployment checklist
-- `deployment/demo_script.md` - Demo scenario walkthrough
+- Sprint 1: Infrastructure & streaming foundation (3 docs)
+- Sprint 2: Feature engineering & ML models (2 docs)
+- Sprint 3: Integration & ranker (3 docs)
+- Sprint 4: Automation & monitoring (1 doc)
+- Sprint 5: Production hardening (1 doc)
 
-## Quick Links
+## 🔧 Implementation Details
 
-### For Developers
-- [Implementation Flow](../IMPLEMENTATION_FLOW.md) - Sprint-by-sprint guide
-- [Backend README](../backend/README.md) - Backend setup
-- [Frontend README](../frontend/README.md) - Frontend setup
-- [ML Pipeline README](../ml/README.md) - ML training guide
+In `implementation/` folder:
+- Data simulator implementation details
 
-### For DevOps
-- [Infrastructure README](../infrastructure/README.md) - Infrastructure setup
-- [Docker Compose Dev](../compose.dev.yaml) - Development environment
-- [Docker Compose Prod](../compose.prod.yaml) - Production environment
+## 🧪 Testing
 
-### For Product/Business
-- [Project Plan](../Project_Plan_Telco_Recommender.txt) - Original project plan
-- Success metrics and KPIs
-- A/B testing framework
+See `../tests/README.md` for testing documentation and scripts.
 
-## Documentation Standards
+---
 
-### Writing Guidelines
-1. Use clear, concise language
-2. Include code examples where applicable
-3. Keep diagrams up-to-date with architecture
-4. Document all API changes
-5. Version all documentation
-
-### Markdown Conventions
-- Use ATX-style headers (`#`, `##`, `###`)
-- Code blocks with language specification
-- Tables for structured data
-- Links to related documentation
-
-## Contributing to Documentation
-
-When making changes:
-1. Update relevant documentation files
-2. Keep cross-references consistent
-3. Add diagrams for complex concepts
-4. Include practical examples
-5. Review for technical accuracy
-
-## Documentation Maintenance
-
-- Review quarterly for accuracy
-- Update after major releases
-- Archive outdated versions
-- Collect feedback from users
-
-## Status
-
-🚧 **Under Development** - Documentation evolving with implementation
-
-Planned documentation:
-- [ ] Complete API specification (OpenAPI)
-- [ ] System architecture diagrams
-- [ ] Data flow visualization
-- [ ] UI/UX design mockups
-- [ ] Production deployment guide
-- [ ] Demo script for stakeholders
-
-See `../IMPLEMENTATION_FLOW.md` for implementation timeline.
+**Last Updated**: November 8, 2024
+**Status**: Production Ready
