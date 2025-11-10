@@ -1,11 +1,11 @@
 # Multi-stage build for production optimization
-FROM node:18-alpine as base
+FROM node:18-alpine AS base
 
 # Set working directory
 WORKDIR /app
 
 # Install dependencies only when needed
-FROM base as deps
+FROM base AS deps
 
 # Copy package files
 COPY package.json package-lock.json* ./
@@ -14,7 +14,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 
 # Development stage
-FROM base as development
+FROM base AS development
 
 # Copy dependencies
 COPY --from=deps /app/node_modules ./node_modules
@@ -29,7 +29,7 @@ EXPOSE 5173
 CMD ["npm", "run", "dev", "--", "--host"]
 
 # Build stage
-FROM base as builder
+FROM base AS builder
 
 # Copy dependencies
 COPY --from=deps /app/node_modules ./node_modules
@@ -41,7 +41,7 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine as production
+FROM node:18-alpine AS production
 
 # Set working directory
 WORKDIR /app

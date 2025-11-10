@@ -248,18 +248,19 @@ class Settings(BaseSettings):
         description="Access token expiration in minutes"
     )
 
-    ALLOWED_ORIGINS: List[str] = Field(
-        default=["http://localhost:5173", "http://localhost:3000"],
-        description="CORS allowed origins"
+    ALLOWED_ORIGINS: str = Field(
+        default="http://localhost:5173,http://localhost:3000",
+        description="CORS allowed origins (comma-separated)"
     )
 
-    @field_validator("ALLOWED_ORIGINS", mode="before")
-    @classmethod
-    def parse_allowed_origins(cls, v):
-        """Parse ALLOWED_ORIGINS from comma-separated string."""
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v
+    @property
+    def cors_origins(self) -> List[str]:
+        """Get CORS origins as list."""
+        if isinstance(self.ALLOWED_ORIGINS, list):
+            return self.ALLOWED_ORIGINS
+        if isinstance(self.ALLOWED_ORIGINS, str):
+            return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
+        return ["http://localhost:5173", "http://localhost:3000"]
 
     # ==============================================
     # MLFLOW SETTINGS

@@ -1,5 +1,3 @@
-version: '3.8'
-
 name: telco-recommender-dev
 
 services:
@@ -12,7 +10,7 @@ services:
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
       POSTGRES_DB: ${DATABASE_NAME:-telco_recommender}
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d
@@ -113,27 +111,24 @@ services:
       - backend
     networks:
       - telco-network
-    command: npm run dev -- --host
+    command: npm run dev -- --host 0.0.0.0 --port 5173
 
   # MLflow Tracking Server
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.9.2
     container_name: telco-mlflow-dev
     environment:
-      - BACKEND_STORE_URI=postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@postgres:5432/mlflow
+      - BACKEND_STORE_URI=sqlite:///mlflow/mlflow.db
       - ARTIFACT_ROOT=/mlflow/artifacts
     ports:
       - "5000:5000"
     volumes:
       - mlflow_data:/mlflow
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks:
       - telco-network
     command: >
       mlflow server
-      --backend-store-uri postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@postgres:5432/mlflow
+      --backend-store-uri sqlite:///mlflow/mlflow.db
       --default-artifact-root /mlflow/artifacts
       --host 0.0.0.0
       --port 5000
@@ -192,15 +187,17 @@ services:
     networks:
       - telco-network
     entrypoint: /bin/bash
-    command: >
-      -c "airflow db init &&
-          airflow users create
-          --username ${AIRFLOW_ADMIN_USER:-admin}
-          --password ${AIRFLOW_ADMIN_PASSWORD:-admin}
-          --firstname Admin
-          --lastname User
-          --role Admin
-          --email ${AIRFLOW_ADMIN_EMAIL:-admin@example.com}"
+    command:
+      - -c
+      - |
+        airflow db init
+        airflow users create \
+          --username $${AIRFLOW_ADMIN_USER:-admin} \
+          --password $${AIRFLOW_ADMIN_PASSWORD:-admin} \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email $${AIRFLOW_ADMIN_EMAIL:-admin@example.com}
 
   airflow-webserver:
     image: apache/airflow:2.8.0-python3.10

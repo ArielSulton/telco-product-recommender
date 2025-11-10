@@ -1,5 +1,5 @@
 # Multi-stage build for production optimization
-FROM python:3.10-slim as base
+FROM python:3.10-slim AS base
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Development stage
-FROM base as development
+FROM base AS development
 
 # Copy requirements
 COPY requirements.txt requirements-dev.txt ./
@@ -35,7 +35,7 @@ EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 # Production stage
-FROM base as production
+FROM base AS production
 
 # Copy requirements
 COPY requirements.txt ./

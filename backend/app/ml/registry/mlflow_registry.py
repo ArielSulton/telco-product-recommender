@@ -24,9 +24,9 @@ import mlflow.pyfunc
 from mlflow.tracking import MlflowClient
 from mlflow.exceptions import MlflowException
 
-from backend.app.ml.models.segmentation.kmeans_segmenter import KMeansSegmenter
-from backend.app.ml.models.collaborative.lightfm_recommender import LightFMRecommender
-from backend.app.ml.models.ranker.xgboost_ranker import XGBoostRanker
+from app.ml.models.segmentation.kmeans_segmenter import KMeansSegmenter
+from app.ml.models.collaborative.lightfm_recommender import LightFMRecommender
+from app.ml.models.ranker.xgboost_ranker import XGBoostRanker
 
 logger = logging.getLogger(__name__)
 

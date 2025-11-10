@@ -16,9 +16,11 @@ docker compose restart backend
 
 ### Access
 - Frontend: http://localhost:5173
-- API Docs: http://localhost:8000/docs
+- Backend: http://localhost:8000/api/v1/docs
+- MLflow: http://localhost:5000
 - Airflow: http://localhost:8080 (admin/admin)
 - Grafana: http://localhost:3000 (admin/admin)
+- Prometheus: http://localhost:9090
 
 ### Debug
 ```bash

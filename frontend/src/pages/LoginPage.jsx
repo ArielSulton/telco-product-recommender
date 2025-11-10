@@ -29,7 +29,7 @@ const LoginPage = () => {
     try {
       // Use mock login for development
       const authService = await import('../services/authService')
-      authService.default.mockLogin(formData.phone)
+      authService.default.mockLogin(formData.phone, formData.password)
 
       // Redirect to dashboard
       navigate('/dashboard')

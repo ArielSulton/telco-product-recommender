@@ -225,7 +225,7 @@ class Event(Base):
         ab_variant: A/B test variant identifier
         timestamp: Event occurrence timestamp
         session_id: Session identifier for grouping events
-        metadata: Additional event context (JSONB)
+        event_metadata: Additional event context (JSONB)
         created_at: Record creation timestamp
     """
 
@@ -250,7 +250,7 @@ class Event(Base):
     ab_variant: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     session_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    event_metadata: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
     # Relationships

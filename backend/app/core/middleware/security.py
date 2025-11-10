@@ -66,7 +66,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data: https:; "
             "font-src 'self' data:; "
-            "connect-src 'self' " + " ".join(settings.ALLOWED_ORIGINS) + "; "
+            "connect-src 'self' " + " ".join(settings.cors_origins) + "; "
             "frame-ancestors 'none'; "
             "base-uri 'self'; "
             "form-action 'self';"

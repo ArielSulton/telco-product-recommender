@@ -78,12 +78,28 @@ const authService = {
   },
 
   // Mock login (for development without backend)
-  mockLogin(phone) {
+  mockLogin(phone, password) {
+    // Fixed credentials untuk demo
+    const validCredentials = [
+      { phone: '08123456789', password: 'user123', name: 'Demo User', segment: 2 },
+      { phone: 'admin', password: 'admin123', name: 'Admin User', segment: 1 },
+      { phone: '08111111111', password: 'demo', name: 'Test User', segment: 3 },
+    ]
+
+    // Check credentials
+    const credential = validCredentials.find(
+      c => c.phone === phone && c.password === password
+    )
+
+    if (!credential) {
+      throw new Error('Invalid phone number or password')
+    }
+
     const mockUser = {
       id: '123e4567-e89b-12d3-a456-426614174000',
-      phone: phone,
-      name: 'Demo User',
-      segment: 2,
+      phone: credential.phone,
+      name: credential.name,
+      segment: credential.segment,
       balance: 100000,
     }
     const mockToken = 'mock-jwt-token-' + Date.now()

@@ -121,7 +121,7 @@ async def track_event(
             product_id=event.product_id,
             session_id=event.session_id,
             ab_variant=event.ab_variant,
-            metadata=event.metadata,
+            metadata=event.event_metadata,
             timestamp=event.timestamp
         )
 

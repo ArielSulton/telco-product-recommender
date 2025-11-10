@@ -25,11 +25,11 @@ import time
 import logging
 from dataclasses import dataclass
 
-from backend.app.ml.models.segmentation.kmeans_segmenter import KMeansSegmenter
-from backend.app.ml.models.collaborative.lightfm_recommender import LightFMRecommender
-from backend.app.ml.models.ranker.xgboost_ranker import XGBoostRanker
-from backend.app.ml.models.baseline.top_popular import TopPopularBaseline
-from backend.app.ml.diversification.mmr import MMRDiversifier
+from app.ml.models.segmentation.kmeans_segmenter import KMeansSegmenter
+from app.ml.models.collaborative.lightfm_recommender import LightFMRecommender
+from app.ml.models.ranker.xgboost_ranker import XGBoostRanker
+from app.ml.models.baseline.top_popular import TopPopularBaseline
+from app.ml.diversification.mmr import MMRDiversifier
 
 logger = logging.getLogger(__name__)
 

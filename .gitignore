@@ -84,14 +84,6 @@ logs
 # ================================
 # Machine Learning
 # ================================
-# Data files (large datasets)
-ml/data/raw/*.csv
-ml/data/raw/*.parquet
-ml/data/processed/*.csv
-ml/data/processed/*.parquet
-ml/data/features/*.csv
-ml/data/features/*.parquet
-
 # Model artifacts
 *.pkl
 *.joblib

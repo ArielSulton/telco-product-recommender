@@ -130,7 +130,13 @@ def main():
     # Start scheduler
     try:
         logger.info("🎬 Scheduler started - waiting for triggers...")
-        logger.info(f"📊 Next run scheduled at: {scheduler.get_jobs()[0].next_run_time}")
+        jobs = scheduler.get_jobs()
+        if jobs:
+            # APScheduler 4.x compatible way to get next run time
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc)
+            next_run = jobs[0].trigger.get_next_fire_time(None, now)
+            logger.info(f"📊 Next run scheduled at: {next_run}")
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
         logger.info("⏹️ Scheduler stopped")

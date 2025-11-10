@@ -286,7 +286,7 @@ class EventRequest(BaseSchema):
     session_id: Optional[str] = Field(None, description="Session identifier")
     ab_variant: Optional[str] = Field(None, description="A/B test variant")
     timestamp: Optional[datetime] = Field(None, description="Event timestamp")
-    metadata: Optional[Dict[str, Any]] = Field(
+    event_metadata: Optional[Dict[str, Any]] = Field(
         default={},
         description="Additional event context"
     )
