@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 
 const ProfilePage = () => {
   const { user, updateProfile } = useAuth()
+  const toast = useToast()
 
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -28,10 +30,10 @@ const ProfilePage = () => {
     try {
       await updateProfile(formData)
       setEditing(false)
-      alert('Profile updated successfully!')
+      toast.success('Profile updated successfully!')
     } catch (error) {
       console.error('Failed to update profile:', error)
-      alert('Failed to update profile. Please try again.')
+      toast.error('Failed to update profile. Please try again.')
     } finally {
       setSaving(false)
     }

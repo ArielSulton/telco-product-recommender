@@ -16,6 +16,7 @@ Performance Targets:
 - Data loss rate < 0.1%
 """
 
+import asyncio
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
@@ -32,6 +33,93 @@ router = APIRouter(prefix="/events", tags=["Events"])
 
 # Global service instance (initialized on startup)
 _event_service: EventService = None
+_flush_task: Optional[asyncio.Task] = None
+
+
+def initialize_event_service(
+    batch_size: int = 100,
+    flush_interval: int = 5
+) -> None:
+    """
+    Initialize event service for tracking user interactions.
+
+    This function should be called during application startup (in lifespan).
+
+    Args:
+        batch_size: Number of events to batch before database write
+        flush_interval: Seconds between automatic flushes
+
+    Raises:
+        RuntimeError: If service initialization fails
+    """
+    global _event_service, _flush_task
+
+    logger.info("🔄 Initializing event service...")
+
+    try:
+        # Create event service
+        _event_service = EventService(
+            batch_size=batch_size,
+            flush_interval=flush_interval
+        )
+
+        # Start background flush task
+        # The task will create its own database session
+        import asyncio
+        from app.db.session import AsyncSessionLocal
+
+        async def _background_flush_wrapper():
+            """Wrapper to manage database session for background flush."""
+            async with AsyncSessionLocal() as session:
+                try:
+                    await _event_service.start_background_flush(session)
+                except Exception as e:
+                    logger.error(f"Event background flush error: {str(e)}", exc_info=True)
+
+        _flush_task = asyncio.create_task(_background_flush_wrapper())
+
+        logger.info("✅ Event service initialized successfully")
+        logger.info(f"   - Batch size: {batch_size} events")
+        logger.info(f"   - Flush interval: {flush_interval} seconds")
+
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize event service: {str(e)}", exc_info=True)
+        raise RuntimeError(f"Event service initialization failed: {str(e)}")
+
+
+async def shutdown_event_service() -> None:
+    """
+    Shutdown event service and flush remaining events.
+
+    This function should be called during application shutdown (in lifespan).
+    """
+    global _event_service, _flush_task
+
+    if _event_service is not None:
+        logger.info("🛑 Shutting down event service...")
+
+        try:
+            # Cancel background flush task
+            if _flush_task and not _flush_task.done():
+                _flush_task.cancel()
+                try:
+                    await _flush_task
+                except asyncio.CancelledError:
+                    pass
+
+            # Flush remaining events with a dedicated session
+            from app.db.session import AsyncSessionLocal
+            async with AsyncSessionLocal() as session:
+                await _event_service.stop_background_flush(session)
+
+            logger.info("✅ Event service shutdown complete")
+
+        except Exception as e:
+            logger.error(f"Event service shutdown error: {str(e)}")
+
+        finally:
+            _event_service = None
+            _flush_task = None
 
 
 def get_event_service() -> EventService:

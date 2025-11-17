@@ -82,20 +82,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         except Exception as e:
             logger.warning(f"⚠️ Redis connection failed: {str(e)}")
 
-        # TODO: Load ML models from MLflow
-        # from app.ml.registry.model_loader import load_production_models
-        # models = await load_production_models()
-        logger.info("⚠️ ML models loading skipped (TODO)")
+        # Load ML models from MLflow
+        try:
+            from app.ml.registry.model_loader import load_production_models
+            models = await load_production_models(fallback_to_baseline=True)
+            logger.info("✅ ML models loaded successfully")
+        except Exception as e:
+            logger.error(f"❌ Failed to load ML models: {str(e)}")
+            # Continue with empty models - services will use fallbacks
+            models = {'segmenter': None, 'cf_model': None, 'ranker': None, 'baseline': None}
 
-        # TODO: Initialize recommendation service
-        # from app.api.v1.endpoints.recommendations import initialize_recommendation_service
-        # await initialize_recommendation_service(pipeline, redis_client)
-        logger.info("⚠️ Recommendation service initialization skipped (TODO)")
+        # Initialize recommendation service
+        try:
+            from app.api.v1.endpoints.recommendations import initialize_recommendation_service
+            initialize_recommendation_service(models, redis_client, cache_ttl=300)
+            logger.info("✅ Recommendation service initialized")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize recommendation service: {str(e)}")
 
-        # TODO: Initialize event service
-        # from app.api.v1.endpoints.events import initialize_event_service
-        # await initialize_event_service(db, batch_size=100, flush_interval=5)
-        logger.info("⚠️ Event service initialization skipped (TODO)")
+        # Initialize event service
+        try:
+            from app.api.v1.endpoints.events import initialize_event_service
+            initialize_event_service(batch_size=100, flush_interval=5)
+            logger.info("✅ Event service initialized")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize event service: {str(e)}")
 
         logger.info("✅ Application startup complete")
 
@@ -105,13 +116,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         # Shutdown logic
         logger.info("🛑 Shutting down Telco Recommender API")
 
-        # TODO: Shutdown event service
-        # from app.api.v1.endpoints.events import shutdown_event_service
-        # await shutdown_event_service(db)
+        # Shutdown event service
+        try:
+            from app.api.v1.endpoints.events import shutdown_event_service
+            await shutdown_event_service()
+            logger.info("✅ Event service shutdown complete")
+        except Exception as e:
+            logger.warning(f"Event service shutdown error: {str(e)}")
 
-        # TODO: Shutdown recommendation service
-        # from app.api.v1.endpoints.recommendations import shutdown_recommendation_service
-        # await shutdown_recommendation_service()
+        # Shutdown recommendation service
+        try:
+            from app.api.v1.endpoints.recommendations import shutdown_recommendation_service
+            shutdown_recommendation_service()
+            logger.info("✅ Recommendation service shutdown complete")
+        except Exception as e:
+            logger.warning(f"Recommendation service shutdown error: {str(e)}")
 
         # Close Redis connection
         try:

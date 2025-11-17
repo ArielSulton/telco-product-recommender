@@ -33,6 +33,82 @@ router = APIRouter(prefix="/recommend", tags=["Recommendations"])
 _recommendation_service: RecommendationService = None
 
 
+def initialize_recommendation_service(
+    models: dict,
+    redis_client: redis.Redis,
+    cache_ttl: int = 300
+) -> None:
+    """
+    Initialize recommendation service with loaded ML models.
+
+    This function should be called during application startup (in lifespan).
+
+    Args:
+        models: Dictionary with loaded ML models (segmenter, cf_model, ranker, baseline)
+        redis_client: Redis client for caching
+        cache_ttl: Cache TTL in seconds (default: 300 = 5 minutes)
+
+    Raises:
+        ValueError: If required models are missing
+        RuntimeError: If pipeline initialization fails
+    """
+    global _recommendation_service
+
+    logger.info("🔄 Initializing recommendation service...")
+
+    try:
+        # Create hybrid pipeline with loaded models
+        from app.ml.models.baseline.top_popular import TopPopularBaseline
+        from app.ml.diversification.mmr import MMRDiversifier
+
+        pipeline = HybridPipeline(
+            segmenter=models.get('segmenter'),
+            cf_model=models.get('cf_model'),
+            ranker=models.get('ranker'),
+            baseline=models.get('baseline') or TopPopularBaseline(),
+            diversifier=MMRDiversifier(lambda_param=0.7),
+            cache_client=redis_client,
+            cache_ttl=cache_ttl
+        )
+
+        # Initialize pipeline (validate all components)
+        is_initialized = pipeline.initialize()
+
+        if not is_initialized:
+            logger.warning("⚠️ Pipeline initialization incomplete, using fallback mode")
+
+        # Create recommendation service
+        _recommendation_service = RecommendationService(
+            pipeline=pipeline,
+            redis_client=redis_client,
+            cache_ttl=cache_ttl
+        )
+
+        logger.info("✅ Recommendation service initialized successfully")
+        logger.info(f"   - Segmenter: {'✓' if models.get('segmenter') else '✗'}")
+        logger.info(f"   - CF Model: {'✓' if models.get('cf_model') else '✗'}")
+        logger.info(f"   - Ranker: {'✓' if models.get('ranker') else '✗'}")
+        logger.info(f"   - Baseline: {'✓' if models.get('baseline') else '✗'}")
+
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize recommendation service: {str(e)}", exc_info=True)
+        raise RuntimeError(f"Recommendation service initialization failed: {str(e)}")
+
+
+def shutdown_recommendation_service() -> None:
+    """
+    Shutdown recommendation service and release resources.
+
+    This function should be called during application shutdown (in lifespan).
+    """
+    global _recommendation_service
+
+    if _recommendation_service is not None:
+        logger.info("🛑 Shutting down recommendation service...")
+        _recommendation_service = None
+        logger.info("✅ Recommendation service shutdown complete")
+
+
 def get_recommendation_service(
     redis_client: redis.Redis = Depends(get_redis)
 ) -> RecommendationService:
@@ -48,11 +124,9 @@ def get_recommendation_service(
     global _recommendation_service
 
     if _recommendation_service is None:
-        # TODO: Load pipeline from registry on startup
-        # For now, create placeholder service
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Recommendation service not initialized"
+            detail="Recommendation service not initialized. Service may still be starting up."
         )
 
     return _recommendation_service

@@ -177,9 +177,12 @@ services:
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY:-}
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY:-}
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - _PIP_ADDITIONAL_REQUIREMENTS=mlflow==2.9.2 scikit-learn lightfm xgboost joblib
     volumes:
       - ./infrastructure/airflow/dags:/opt/airflow/dags
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins
+      - ./backend:/opt/airflow/backend
       - airflow_logs:/opt/airflow/logs
     depends_on:
       postgres:
@@ -207,11 +210,14 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@postgres:5432/airflow
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY:-}
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY:-}
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - _PIP_ADDITIONAL_REQUIREMENTS=mlflow==2.9.2 scikit-learn lightfm xgboost joblib
     ports:
       - "8080:8080"
     volumes:
       - ./infrastructure/airflow/dags:/opt/airflow/dags
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins
+      - ./backend:/opt/airflow/backend
       - airflow_logs:/opt/airflow/logs
     depends_on:
       - airflow-init
@@ -228,13 +234,17 @@ services:
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY:-}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - _PIP_ADDITIONAL_REQUIREMENTS=mlflow==2.9.2 scikit-learn lightfm xgboost joblib
     volumes:
       - ./infrastructure/airflow/dags:/opt/airflow/dags
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins
+      - ./backend:/opt/airflow/backend
       - airflow_logs:/opt/airflow/logs
     depends_on:
       - airflow-init
       - redis
+      - mlflow
     networks:
       - telco-network
     command: scheduler

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useToast } from '../context/ToastContext'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -9,17 +10,14 @@ import recommendationService from '../services/recommendationService'
 const ProductDetailPage = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const toast = useToast()
   const { trackSubscribe } = useEventTracking()
 
   const [product, setProduct] = useState(null)
   const [loading, setLoading] = useState(true)
   const [purchasing, setPurchasing] = useState(false)
 
-  useEffect(() => {
-    loadProduct()
-  }, [id])
-
-  const loadProduct = async () => {
+  const loadProduct = useCallback(async () => {
     try {
       setLoading(true)
       // Use mock data for development
@@ -36,7 +34,11 @@ const ProductDetailPage = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [id])
+
+  useEffect(() => {
+    loadProduct()
+  }, [loadProduct])
 
   const handlePurchase = async () => {
     if (!product) return
@@ -54,11 +56,11 @@ const ProductDetailPage = () => {
       await new Promise((resolve) => setTimeout(resolve, 1500))
 
       // Show success message and redirect
-      alert('Purchase successful! Package will be activated shortly.')
+      toast.success('Purchase successful! Package will be activated shortly.')
       navigate('/dashboard')
     } catch (error) {
       console.error('Purchase failed:', error)
-      alert('Purchase failed. Please try again.')
+      toast.error('Purchase failed. Please try again.')
     } finally {
       setPurchasing(false)
     }
@@ -86,7 +88,7 @@ const ProductDetailPage = () => {
               Product Not Found
             </h2>
             <p className="text-gray-600 mb-6">
-              The product you're looking for doesn't exist.
+              The product you&apos;re looking for doesn&apos;t exist.
             </p>
             <button onClick={() => navigate('/products')} className="btn-primary">
               Back to Products

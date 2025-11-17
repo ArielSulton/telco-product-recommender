@@ -1,24 +1,29 @@
 import React, { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import ProductCard from './ProductCard'
-import LoadingSpinner from './LoadingSpinner'
+import SkeletonCard from './SkeletonCard'
+import EmptyState from './EmptyState'
 import useRecommendations from '../hooks/useRecommendations'
 
 const RecommendationWidget = ({ title = 'Recommended for You', limit = 3, useMock = false }) => {
+  const navigate = useNavigate()
   const { recommendations, loading, error, variant, fetchRecommendations } =
     useRecommendations()
 
   useEffect(() => {
     fetchRecommendations({}, limit, useMock)
-  }, [limit, useMock])
+  }, [fetchRecommendations, limit, useMock])
 
   if (loading) {
     return (
-      <div className="py-12">
-        <h2 className="section-title text-center">{title}</h2>
-        <div className="flex justify-center">
-          <LoadingSpinner text="Loading recommendations..." />
+      <section className="py-8">
+        <h2 className="section-title">{title}</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Array.from({ length: limit }).map((_, index) => (
+            <SkeletonCard key={index} />
+          ))}
         </div>
-      </div>
+      </section>
     )
   }
 
@@ -36,7 +41,18 @@ const RecommendationWidget = ({ title = 'Recommended for You', limit = 3, useMoc
   }
 
   if (!recommendations.length) {
-    return null
+    return (
+      <section className="py-8">
+        <h2 className="section-title">{title}</h2>
+        <div className="card">
+          <EmptyState
+            type="recommendations"
+            action={() => navigate('/products')}
+            actionLabel="Jelajahi Semua Paket"
+          />
+        </div>
+      </section>
+    )
   }
 
   return (

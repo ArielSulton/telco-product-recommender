@@ -268,10 +268,45 @@ class EventService:
         Returns:
             dict: Event statistics
         """
-        # TODO: Implement database queries for stats
-        # For now, return basic buffer stats
+        from datetime import timedelta
+        from sqlalchemy import select, func
+        from app.models.database import Event
+
+        # Calculate time window
+        cutoff_time = datetime.now() - timedelta(hours=hours)
+
+        # Build base query with filters
+        base_filter = [Event.timestamp >= cutoff_time]
+        if user_id:
+            base_filter.append(Event.user_id == user_id)
+        if product_id:
+            base_filter.append(Event.product_id == product_id)
+        if event_type:
+            base_filter.append(Event.event_type == event_type)
+
+        # Query events by type
+        query = select(
+            Event.event_type,
+            func.count(Event.event_id).label('count')
+        ).where(*base_filter).group_by(Event.event_type)
+
+        result = await db.execute(query)
+        stats_by_type = {row[0]: row[1] for row in result.fetchall()}
+
+        # Get total count
+        total_query = select(func.count(Event.event_id)).where(*base_filter)
+        total_result = await db.execute(total_query)
+        total_count = total_result.scalar() or 0
 
         return {
+            "total_events": total_count,
+            "time_window_hours": hours,
+            "events_by_type": stats_by_type,
+            "filters": {
+                "user_id": str(user_id) if user_id else None,
+                "product_id": product_id,
+                "event_type": event_type
+            },
             "total_tracked": self.total_events,
             "total_batches": self.total_batches,
             "failed_events": self.failed_events,
@@ -298,16 +333,32 @@ class EventService:
         Returns:
             list: Recent user events
         """
-        # TODO: Implement database query
-        # For now, return events from buffer
+        from sqlalchemy import select
+        from app.models.database import Event
 
+        # Query recent events for user
+        query = (
+            select(Event)
+            .where(Event.user_id == user_id)
+            .order_by(Event.timestamp.desc())
+            .limit(limit)
+        )
+
+        result = await db.execute(query)
+        events = result.scalars().all()
+
+        # Convert to dict format
         user_events = []
-        async with self.buffer_lock:
-            for event in self.event_buffer:
-                if event.get('user_id') == user_id:
-                    user_events.append(event)
-                    if len(user_events) >= limit:
-                        break
+        for event in events:
+            user_events.append({
+                'event_id': str(event.event_id),
+                'user_id': str(event.user_id) if event.user_id else None,
+                'product_id': event.product_id,
+                'event_type': event.event_type,
+                'timestamp': event.timestamp.isoformat(),
+                'session_id': event.session_id,
+                'metadata': event.event_metadata
+            })
 
         return user_events
 
@@ -328,33 +379,44 @@ class EventService:
         Returns:
             dict: Product interaction metrics
         """
-        # TODO: Implement database aggregation
-        # For now, count from buffer
+        from datetime import timedelta
+        from sqlalchemy import select, func, case
+        from app.models.database import Event
 
-        impressions = 0
-        clicks = 0
-        conversions = 0
+        # Calculate time window
+        cutoff_time = datetime.now() - timedelta(hours=hours)
 
-        async with self.buffer_lock:
-            for event in self.event_buffer:
-                if event.get('product_id') == product_id:
-                    if event['event_type'] == 'impression':
-                        impressions += 1
-                    elif event['event_type'] == 'click':
-                        clicks += 1
-                    elif event['event_type'] == 'conversion':
-                        conversions += 1
+        # Query with aggregation by event type
+        query = select(
+            Event.event_type,
+            func.count(Event.event_id).label('count')
+        ).where(
+            Event.product_id == product_id,
+            Event.timestamp >= cutoff_time
+        ).group_by(Event.event_type)
 
+        result = await db.execute(query)
+        event_counts = {row[0]: row[1] for row in result.fetchall()}
+
+        impressions = event_counts.get('impression', 0)
+        clicks = event_counts.get('click', 0)
+        views = event_counts.get('view', 0)
+        conversions = event_counts.get('conversion', 0) + event_counts.get('subscribe', 0)
+
+        # Calculate metrics
         ctr = clicks / max(impressions, 1) if impressions > 0 else 0
         conversion_rate = conversions / max(clicks, 1) if clicks > 0 else 0
 
         return {
             "product_id": product_id,
+            "time_window_hours": hours,
             "impressions": impressions,
+            "views": views,
             "clicks": clicks,
             "conversions": conversions,
             "ctr": round(ctr, 4),
-            "conversion_rate": round(conversion_rate, 4)
+            "conversion_rate": round(conversion_rate, 4),
+            "total_interactions": impressions + views + clicks + conversions
         }
 
     def _generate_session_id(self) -> str:

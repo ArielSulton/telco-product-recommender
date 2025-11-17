@@ -27,16 +27,23 @@ import sys
 import os
 import pandas as pd
 import numpy as np
+import requests
+import json
+
+# MLflow imports
 import mlflow
-from scipy import stats
+import mlflow.sklearn
 
-# Add ML modules to path
-sys.path.append('/opt/airflow')
-sys.path.append('/opt/airflow/backend/app')
+# Add backend to Python path for model imports
+# In Airflow container, backend is mounted at /opt/airflow/backend
+backend_path = '/opt/airflow/backend'
+if backend_path not in sys.path:
+    sys.path.insert(0, backend_path)
 
-from backend.app.ml.models.segmentation.kmeans_segmenter import KMeansSegmenter
-from backend.app.ml.models.collaborative.lightfm_recommender import LightFMRecommender
-from backend.app.ml.models.ranker.xgboost_ranker import XGBoostRanker
+# ML model imports
+from app.ml.models.segmentation.kmeans_segmenter import KMeansSegmenter
+from app.ml.models.collaborative.lightfm_recommender import LightFMRecommender
+from app.ml.models.ranker.xgboost_ranker import XGBoostRanker
 
 
 default_args = {

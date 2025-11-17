@@ -1,60 +1,588 @@
 {
-  "title": "Telco Recommender System Overview",
+  "title": "📱 Telco Recommender System Overview",
   "uid": "recommender-system",
-  "schemaVersion": 16,
-  "version": 1,
+  "schemaVersion": 38,
+  "version": 2,
   "timezone": "browser",
   "editable": true,
+  "graphTooltip": 1,
   "refresh": "30s",
   "time": {
     "from": "now-3h",
     "to": "now"
   },
+  "tags": ["recommendations", "ml", "business"],
   "panels": [
     {
       "id": 1,
-      "title": "Total Recommendations Served",
+      "title": "📊 Total Recommendations",
       "type": "stat",
-      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "gridPos": {"x": 0, "y": 0, "w": 4, "h": 4},
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "sum(recommendation_requests_total)",
+          "expr": "sum(increase(recommendation_requests_total[24h]))",
           "refId": "A"
         }
-      ]
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "blue"},
+              {"value": 100, "color": "green"},
+              {"value": 1000, "color": "yellow"}
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "description": "Total recommendations served in last 24 hours"
     },
     {
       "id": 2,
-      "title": "Active Users (Last Hour)",
+      "title": "👥 Active Users (1h)",
       "type": "stat",
-      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "gridPos": {"x": 4, "y": 0, "w": 4, "h": 4},
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "count(count_over_time(events_total{event_type='view'}[1h]))",
+          "expr": "count(count_over_time(events_total{event_type='view'}[1h]) > 0)",
           "refId": "A"
         }
-      ]
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "unit": "short"
+        }
+      },
+      "description": "Unique users with at least one view event in last hour"
     },
     {
       "id": 3,
-      "title": "Recommendation Click-Through Rate",
+      "title": "🎯 Click-Through Rate",
       "type": "gauge",
-      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+      "gridPos": {"x": 8, "y": 0, "w": 4, "h": 4},
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "rate(events_total{event_type='click'}[5m]) / rate(events_total{event_type='view'}[5m])",
+          "expr": "(sum(rate(events_total{event_type='click'}[5m])) / sum(rate(events_total{event_type='view'}[5m]))) * 100",
           "refId": "A"
         }
-      ]
+      ],
+      "options": {
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "red"},
+              {"value": 5, "color": "yellow"},
+              {"value": 10, "color": "green"}
+            ]
+          },
+          "unit": "percent",
+          "decimals": 2
+        }
+      },
+      "description": "Percentage of viewed recommendations that get clicked"
     },
     {
       "id": 4,
+      "title": "💰 Conversion Rate",
+      "type": "gauge",
+      "gridPos": {"x": 12, "y": 0, "w": 4, "h": 4},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "(sum(rate(events_total{event_type='purchase'}[5m])) / sum(rate(events_total{event_type='click'}[5m]))) * 100",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "red"},
+              {"value": 2, "color": "yellow"},
+              {"value": 5, "color": "green"}
+            ]
+          },
+          "unit": "percent",
+          "decimals": 2
+        }
+      },
+      "description": "Percentage of clicks that result in purchases"
+    },
+    {
+      "id": 5,
+      "title": "⚡ Avg Response Time",
+      "type": "stat",
+      "gridPos": {"x": 16, "y": 0, "w": 4, "h": 4},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "avg(rate(http_request_duration_seconds_sum{endpoint='/api/v1/recommendations'}[5m]) / rate(http_request_duration_seconds_count{endpoint='/api/v1/recommendations'}[5m])) * 1000",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "green"},
+              {"value": 100, "color": "yellow"},
+              {"value": 300, "color": "red"}
+            ]
+          },
+          "unit": "ms",
+          "decimals": 1
+        }
+      },
+      "description": "Average recommendation endpoint response time"
+    },
+    {
+      "id": 6,
+      "title": "🔄 Recommendation Cache Hit Rate",
+      "type": "stat",
+      "gridPos": {"x": 20, "y": 0, "w": 4, "h": 4},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "(sum(rate(recommendation_cache_hits_total[5m])) / (sum(rate(recommendation_cache_hits_total[5m])) + sum(rate(recommendation_cache_misses_total[5m])))) * 100",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "red"},
+              {"value": 50, "color": "yellow"},
+              {"value": 80, "color": "green"}
+            ]
+          },
+          "unit": "percent",
+          "decimals": 1
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "User Engagement Funnel",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(events_total{event_type='view'}[5m])) * 60",
+          "legendFormat": "👁️ Views",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(events_total{event_type='click'}[5m])) * 60",
+          "legendFormat": "👆 Clicks",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(events_total{event_type='purchase'}[5m])) * 60",
+          "legendFormat": "💰 Purchases",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          },
+          "unit": "cpm"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "👁️ Views"},
+            "properties": [{"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "👆 Clicks"},
+            "properties": [{"id": "color", "value": {"fixedColor": "orange", "mode": "fixed"}}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "💰 Purchases"},
+            "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "multi"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      },
+      "description": "View → Click → Purchase funnel over time"
+    },
+    {
+      "id": 8,
+      "title": "CTR by User Segment",
+      "type": "bargauge",
+      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "(sum(rate(events_total{event_type='click'}[5m])) by (user_segment) / sum(rate(events_total{event_type='view'}[5m])) by (user_segment)) * 100",
+          "legendFormat": "{{user_segment}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "decimals": 2
+        }
+      },
+      "description": "Click-through rate breakdown by user segment (Budget, Mid-tier, Premium)"
+    },
+    {
+      "id": 9,
+      "title": "Top 10 Recommended Products",
+      "type": "table",
+      "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "topk(10, sum(increase(recommendation_product_served_total[1h])) by (product_id, product_name))",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"align": "auto", "displayMode": "auto"},
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Value"},
+            "properties": [
+              {"id": "displayName", "value": "Times Recommended"},
+              {"id": "custom.displayMode", "value": "color-background"},
+              {"id": "color", "value": {"mode": "thresholds"}},
+              {"id": "thresholds", "value": {
+                "mode": "absolute",
+                "steps": [
+                  {"value": null, "color": "blue"},
+                  {"value": 50, "color": "green"},
+                  {"value": 100, "color": "yellow"}
+                ]
+              }}
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {"Time": true},
+            "renameByName": {
+              "product_id": "Product ID",
+              "product_name": "Product Name"
+            }
+          }
+        }
+      ],
+      "description": "Most frequently recommended products in last hour"
+    },
+    {
+      "id": 10,
+      "title": "Recommendation Diversity by Segment",
+      "type": "piechart",
+      "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(increase(recommendation_requests_total[1h])) by (user_segment)",
+          "legendFormat": "{{user_segment}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]},
+        "pieType": "donut",
+        "displayLabels": ["name", "percent"]
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Budget"},
+            "properties": [{"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Mid-tier"},
+            "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Premium"},
+            "properties": [{"id": "color", "value": {"fixedColor": "orange", "mode": "fixed"}}]
+          }
+        ]
+      },
+      "description": "Distribution of recommendations across user segments"
+    },
+    {
+      "id": 11,
+      "title": "Revenue Impact from Recommendations",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 20, "w": 12, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(recommendation_revenue_total[5m])) * 60",
+          "legendFormat": "Revenue/min",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(recommendation_revenue_total[1h]))",
+          "legendFormat": "Hourly Revenue",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "currencyIDR"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Revenue/min"},
+            "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "multi"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      },
+      "description": "Revenue attributed to recommendation-driven purchases"
+    },
+    {
+      "id": 12,
+      "title": "Segment Performance Comparison",
+      "type": "table",
+      "gridPos": {"x": 12, "y": 20, "w": 12, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(events_total{event_type='view'}[1h])) by (user_segment)",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "expr": "sum(rate(events_total{event_type='click'}[1h])) by (user_segment)",
+          "refId": "B",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "expr": "sum(rate(events_total{event_type='purchase'}[1h])) by (user_segment)",
+          "refId": "C",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"align": "auto", "displayMode": "auto"},
+          "unit": "cpm",
+          "decimals": 2
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "user_segment"},
+            "properties": [{"id": "displayName", "value": "Segment"}]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {"Time": true},
+            "renameByName": {
+              "Value #A": "Views/min",
+              "Value #B": "Clicks/min",
+              "Value #C": "Purchases/min"
+            }
+          }
+        }
+      ],
+      "description": "Engagement metrics by user segment"
+    },
+    {
+      "id": 13,
+      "title": "Recommendation Latency Percentiles",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 28, "w": 12, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{endpoint='/api/v1/recommendations'}[5m])) by (le)) * 1000",
+          "legendFormat": "p50 (median)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{endpoint='/api/v1/recommendations'}[5m])) by (le)) * 1000",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{endpoint='/api/v1/recommendations'}[5m])) by (le)) * 1000",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "ms"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "p99"},
+            "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "multi"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      },
+      "description": "Recommendation endpoint latency distribution"
+    },
+    {
+      "id": 14,
+      "title": "Recommendation Throughput by Hour",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 28, "w": 12, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(recommendation_requests_total[5m])) * 60",
+          "legendFormat": "Requests/min",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 20
+          },
+          "unit": "rpm"
+        }
+      },
+      "options": {
+        "tooltip": {"mode": "single"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      },
+      "description": "Number of recommendation requests per minute"
+    },
+    {
+      "id": 15,
+      "title": "Recommendation Error Rate",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 36, "w": 8, "h": 6},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "(sum(rate(http_requests_total{endpoint='/api/v1/recommendations',status=~'5..'}[5m])) / sum(rate(http_requests_total{endpoint='/api/v1/recommendations'}[5m]))) * 100",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "green"},
+              {"value": 0.1, "color": "yellow"},
+              {"value": 1, "color": "red"}
+            ]
+          },
+          "unit": "percent",
+          "decimals": 3
+        }
+      },
+      "description": "Percentage of recommendation requests resulting in errors"
+    },
+    {
+      "id": 16,
       "title": "System Health Status",
       "type": "stat",
-      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+      "gridPos": {"x": 8, "y": 36, "w": 8, "h": 6},
       "datasource": "Prometheus",
       "targets": [
         {
@@ -62,10 +590,61 @@
           "refId": "A"
         }
       ],
-      "mappings": [
-        {"value": 1, "text": "Healthy", "color": "green"},
-        {"value": 0, "text": "Down", "color": "red"}
-      ]
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"type": "value", "value": "1", "text": "✅ Healthy"},
+            {"type": "value", "value": "0", "text": "❌ Down"}
+          ],
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "red"},
+              {"value": 1, "color": "green"}
+            ]
+          }
+        }
+      },
+      "description": "Overall system health status"
+    },
+    {
+      "id": 17,
+      "title": "User Satisfaction Score",
+      "type": "gauge",
+      "gridPos": {"x": 16, "y": 36, "w": 8, "h": 6},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "avg(recommendation_user_satisfaction_score)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 5,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "red"},
+              {"value": 3, "color": "yellow"},
+              {"value": 4, "color": "green"}
+            ]
+          },
+          "unit": "short",
+          "decimals": 2
+        }
+      },
+      "description": "Average user satisfaction rating (1-5 scale)"
     }
   ]
 }

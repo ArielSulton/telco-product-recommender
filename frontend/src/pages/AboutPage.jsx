@@ -1,29 +1,30 @@
 import React from 'react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
+import { Target, Zap, Shield, BarChart3 } from 'lucide-react'
 
 const AboutPage = () => {
   const features = [
     {
-      icon: '🎯',
+      icon: Target,
       title: 'Personalized Recommendations',
       description:
         'Get product recommendations tailored to your usage patterns using advanced machine learning.',
     },
     {
-      icon: '⚡',
+      icon: Zap,
       title: 'Real-Time Insights',
       description:
         'Track your data usage and get instant recommendations based on your current needs.',
     },
     {
-      icon: '🔒',
+      icon: Shield,
       title: 'Secure & Private',
       description:
         'Your data is encrypted and secure. We prioritize your privacy in all recommendations.',
     },
     {
-      icon: '📊',
+      icon: BarChart3,
       title: 'Smart Analytics',
       description:
         'Understand your usage patterns with detailed analytics and insights.',
@@ -58,7 +59,7 @@ const AboutPage = () => {
             <h2 className="section-title text-center">Our Mission</h2>
             <p className="text-lg text-gray-700 text-center mb-8">
               At Paketify, we believe that choosing the right telco package
-              shouldn't be complicated. Our mission is to simplify your decision
+              shouldn&apos;t be complicated. Our mission is to simplify your decision
               by providing personalized recommendations based on your actual
               usage patterns, preferences, and behavior.
             </p>
@@ -76,15 +77,20 @@ const AboutPage = () => {
             <h2 className="section-title text-center">Key Features</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
-              {features.map((feature, index) => (
-                <div key={index} className="card text-center">
-                  <div className="text-5xl mb-4">{feature.icon}</div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-3">
-                    {feature.title}
-                  </h3>
-                  <p className="text-gray-600">{feature.description}</p>
-                </div>
-              ))}
+              {features.map((feature, index) => {
+                const IconComponent = feature.icon
+                return (
+                  <div key={index} className="card text-center">
+                    <div className="flex justify-center mb-4">
+                      <IconComponent className="w-12 h-12 text-green-600" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-3">
+                      {feature.title}
+                    </h3>
+                    <p className="text-gray-600">{feature.description}</p>
+                  </div>
+                )
+              })}
             </div>
           </div>
         </section>
@@ -141,7 +147,7 @@ const AboutPage = () => {
                   </h3>
                   <p className="text-gray-600">
                     Our XGBoost ranking model scores and ranks candidates based on
-                    multiple features to predict which packages you're most likely
+                    multiple features to predict which packages you&apos;re most likely
                     to prefer.
                   </p>
                 </div>

@@ -41,6 +41,14 @@ const Navbar = () => {
                 <Link to="/dashboard" className="navbar-link">
                   DASHBOARD
                 </Link>
+                <Link to="/purchases" className="navbar-link">
+                  RIWAYAT
+                </Link>
+                {user?.role === 'admin' && (
+                  <Link to="/admin" className="navbar-link text-green-700">
+                    ADMIN
+                  </Link>
+                )}
                 <button onClick={handleLogout} className="navbar-link">
                   LOGOUT
                 </button>
@@ -131,6 +139,22 @@ const Navbar = () => {
                 >
                   DASHBOARD
                 </Link>
+                <Link
+                  to="/purchases"
+                  className="block navbar-link"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  RIWAYAT
+                </Link>
+                {user?.role === 'admin' && (
+                  <Link
+                    to="/admin"
+                    className="block navbar-link text-green-700"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    ADMIN
+                  </Link>
+                )}
                 <Link
                   to="/profile"
                   className="block navbar-link"

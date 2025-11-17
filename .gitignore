@@ -213,14 +213,13 @@ temp/
 # ================================
 # Documentation builds
 # ================================
-docs/release/
-docs/_build/
+release/
+_build/
 site/
 
 # ================================
 # Other files
 # ================================
-!.gitkeep
 UI_REFERENCE/
 Project_Plan_Telco_Recommender.txt
 IMPLEMENTATION_FLOW.md

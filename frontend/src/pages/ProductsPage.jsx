@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import ProductCard from '../components/ProductCard'
@@ -11,13 +11,23 @@ const ProductsPage = () => {
   const [loading, setLoading] = useState(true)
   const [selectedFamily, setSelectedFamily] = useState('all')
 
+  const filterProducts = useCallback(() => {
+    if (selectedFamily === 'all') {
+      setFilteredProducts(products)
+    } else {
+      setFilteredProducts(
+        products.filter((p) => p.product_family === selectedFamily)
+      )
+    }
+  }, [selectedFamily, products])
+
   useEffect(() => {
     loadProducts()
   }, [])
 
   useEffect(() => {
     filterProducts()
-  }, [selectedFamily, products])
+  }, [filterProducts])
 
   const loadProducts = async () => {
     try {
@@ -29,16 +39,6 @@ const ProductsPage = () => {
       console.error('Failed to load products:', error)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const filterProducts = () => {
-    if (selectedFamily === 'all') {
-      setFilteredProducts(products)
-    } else {
-      setFilteredProducts(
-        products.filter((p) => p.product_family === selectedFamily)
-      )
     }
   }
 

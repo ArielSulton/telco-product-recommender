@@ -1,10 +1,9 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import authService from '../services/authService'
 
 const LoginPage = () => {
   const navigate = useNavigate()
-  const { login } = useAuth()
 
   const [formData, setFormData] = useState({
     phone: '',
@@ -27,14 +26,14 @@ const LoginPage = () => {
     setError('')
 
     try {
-      // Use mock login for development
-      const authService = await import('../services/authService')
-      authService.default.mockLogin(formData.phone, formData.password)
+      // Call real login API
+      await authService.login(formData.phone, formData.password)
 
       // Redirect to dashboard
       navigate('/dashboard')
     } catch (err) {
-      setError(err.message || 'Login failed. Please try again.')
+      console.error('Login error:', err)
+      setError(err.response?.data?.error?.message || err.message || 'Invalid phone or password')
     } finally {
       setLoading(false)
     }

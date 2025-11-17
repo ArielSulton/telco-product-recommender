@@ -1,0 +1,495 @@
+{
+  "title": "🔐 Authentication & Security",
+  "uid": "authentication-security",
+  "schemaVersion": 38,
+  "version": 1,
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "tags": ["auth", "security", "users"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "👥 Total Registered Users",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 0, "w": 4, "h": 4},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(increase(auth_registration_total[24h]))",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "blue"},
+              {"value": 100, "color": "green"},
+              {"value": 1000, "color": "yellow"}
+            ]
+          },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "🔑 Active Sessions",
+      "type": "stat",
+      "gridPos": {"x": 4, "y": 0, "w": 4, "h": 4},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(auth_active_sessions)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "✅ Login Success Rate",
+      "type": "gauge",
+      "gridPos": {"x": 8, "y": 0, "w": 4, "h": 4},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "(sum(rate(auth_login_total{status='success'}[5m])) / sum(rate(auth_login_total[5m]))) * 100",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "red"},
+              {"value": 70, "color": "yellow"},
+              {"value": 90, "color": "green"}
+            ]
+          },
+          "unit": "percent"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "❌ Failed Logins (5min)",
+      "type": "stat",
+      "gridPos": {"x": 12, "y": 0, "w": 4, "h": 4},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(increase(auth_login_total{status='failed'}[5m]))",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "green"},
+              {"value": 5, "color": "yellow"},
+              {"value": 20, "color": "red"}
+            ]
+          },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "👨‍💼 Admin Users Active",
+      "type": "stat",
+      "gridPos": {"x": 16, "y": 0, "w": 4, "h": 4},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(auth_active_sessions{role='admin'})",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "fixed", "fixedColor": "orange"},
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "🔓 Token Expiration Rate",
+      "type": "stat",
+      "gridPos": {"x": 20, "y": 0, "w": 4, "h": 4},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(auth_token_expired_total[1h]))",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "unit": "cpm",
+          "decimals": 2
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Registration & Login Trends",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(auth_registration_total[5m]))",
+          "legendFormat": "Registrations",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(auth_login_total{status='success'}[5m]))",
+          "legendFormat": "Successful Logins",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(auth_login_total{status='failed'}[5m]))",
+          "legendFormat": "Failed Logins",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "cpm"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Failed Logins"},
+            "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Successful Logins"},
+            "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "multi"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 8,
+      "title": "JWT Token Operations",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(auth_token_generated_total[5m]))",
+          "legendFormat": "Tokens Generated",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(auth_token_validated_total{result='valid'}[5m]))",
+          "legendFormat": "Tokens Validated (Valid)",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(auth_token_validated_total{result='invalid'}[5m]))",
+          "legendFormat": "Tokens Rejected (Invalid)",
+          "refId": "C"
+        },
+        {
+          "expr": "sum(rate(auth_token_expired_total[5m]))",
+          "legendFormat": "Tokens Expired",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 5
+          },
+          "unit": "cpm"
+        }
+      },
+      "options": {
+        "tooltip": {"mode": "multi"},
+        "legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "last"]}
+      }
+    },
+    {
+      "id": 9,
+      "title": "Failed Login Attempts by Phone",
+      "type": "table",
+      "gridPos": {"x": 0, "y": 12, "w": 8, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "topk(10, sum(increase(auth_login_failed_total[1h])) by (phone))",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"align": "auto", "displayMode": "auto"},
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Value"},
+            "properties": [
+              {"id": "displayName", "value": "Failed Attempts"},
+              {"id": "custom.displayMode", "value": "color-background"},
+              {"id": "color", "value": {
+                "mode": "thresholds"
+              }},
+              {"id": "thresholds", "value": {
+                "mode": "absolute",
+                "steps": [
+                  {"value": null, "color": "green"},
+                  {"value": 3, "color": "yellow"},
+                  {"value": 5, "color": "red"}
+                ]
+              }}
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {"Time": true},
+            "renameByName": {"phone": "Phone Number"}
+          }
+        }
+      ],
+      "description": "Top 10 phone numbers with most failed login attempts (potential brute force)"
+    },
+    {
+      "id": 10,
+      "title": "Password Validation Failures",
+      "type": "bargauge",
+      "gridPos": {"x": 8, "y": 12, "w": 8, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(increase(auth_password_validation_failed_total[1h])) by (reason)",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "unit": "short"
+        }
+      },
+      "description": "Reasons for password validation failures (too short, weak, etc.)"
+    },
+    {
+      "id": 11,
+      "title": "Security Events Timeline",
+      "type": "logs",
+      "gridPos": {"x": 16, "y": 12, "w": 8, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "{job='backend'} |= 'security' or 'auth' or 'unauthorized'",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": true,
+        "dedupStrategy": "none"
+      },
+      "description": "Security-related log events (auth failures, unauthorized access, etc.)"
+    },
+    {
+      "id": 12,
+      "title": "User Role Distribution",
+      "type": "piechart",
+      "gridPos": {"x": 0, "y": 20, "w": 6, "h": 6},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(auth_users_total) by (role)",
+          "legendFormat": "{{role}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]},
+        "pieType": "donut",
+        "displayLabels": ["name", "percent"]
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "admin"},
+            "properties": [{"id": "color", "value": {"fixedColor": "orange", "mode": "fixed"}}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "user"},
+            "properties": [{"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}]
+          }
+        ]
+      }
+    },
+    {
+      "id": 13,
+      "title": "Registration Success Rate",
+      "type": "gauge",
+      "gridPos": {"x": 6, "y": 20, "w": 6, "h": 6},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "(sum(rate(auth_registration_total{status='success'}[5m])) / sum(rate(auth_registration_total[5m]))) * 100",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "red"},
+              {"value": 80, "color": "yellow"},
+              {"value": 95, "color": "green"}
+            ]
+          },
+          "unit": "percent"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "Average Session Duration",
+      "type": "stat",
+      "gridPos": {"x": 12, "y": 20, "w": 6, "h": 6},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "avg(auth_session_duration_seconds)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "unit": "s",
+          "decimals": 0
+        }
+      },
+      "description": "Average session duration before logout or token expiration"
+    },
+    {
+      "id": 15,
+      "title": "Auth Endpoint Latency",
+      "type": "stat",
+      "gridPos": {"x": 18, "y": 20, "w": 6, "h": 6},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "avg(rate(http_request_duration_seconds_sum{endpoint=~'/api/v1/auth/.*'}[5m]) / rate(http_request_duration_seconds_count{endpoint=~'/api/v1/auth/.*'}[5m])) * 1000",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "green"},
+              {"value": 100, "color": "yellow"},
+              {"value": 300, "color": "red"}
+            ]
+          },
+          "unit": "ms",
+          "decimals": 1
+        }
+      },
+      "description": "Average latency for /auth endpoints (register, login, me)"
+    }
+  ]
+}

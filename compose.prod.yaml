@@ -373,9 +373,12 @@ services:
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY}
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - _PIP_ADDITIONAL_REQUIREMENTS=mlflow==2.9.2 scikit-learn lightfm xgboost joblib
     volumes:
       - ./infrastructure/airflow/dags:/opt/airflow/dags:ro
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins:ro
+      - ./backend:/opt/airflow/backend:ro
       - airflow_logs:/opt/airflow/logs
     depends_on:
       postgres:
@@ -402,11 +405,14 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/airflow
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY}
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - _PIP_ADDITIONAL_REQUIREMENTS=mlflow==2.9.2 scikit-learn lightfm xgboost joblib
     expose:
       - "8080"
     volumes:
       - ./infrastructure/airflow/dags:/opt/airflow/dags:ro
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins:ro
+      - ./backend:/opt/airflow/backend:ro
       - airflow_logs:/opt/airflow/logs
     depends_on:
       - airflow-init
@@ -442,12 +448,16 @@ services:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/airflow
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - _PIP_ADDITIONAL_REQUIREMENTS=mlflow==2.9.2 scikit-learn lightfm xgboost joblib
     volumes:
       - ./infrastructure/airflow/dags:/opt/airflow/dags:ro
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins:ro
+      - ./backend:/opt/airflow/backend:ro
       - airflow_logs:/opt/airflow/logs
     depends_on:
       - airflow-init
+      - mlflow
     networks:
       - telco-network
     restart: unless-stopped

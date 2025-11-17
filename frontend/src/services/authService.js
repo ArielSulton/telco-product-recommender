@@ -24,6 +24,13 @@ const authService = {
   async register(userData) {
     try {
       const response = await api.post('/api/v1/auth/register', userData)
+
+      // Store token and user data after successful registration
+      if (response.data.access_token) {
+        localStorage.setItem('token', response.data.access_token)
+        localStorage.setItem('user', JSON.stringify(response.data.user))
+      }
+
       return response.data
     } catch (error) {
       throw error
@@ -58,8 +65,11 @@ const authService = {
   // Get user profile
   async getUserProfile() {
     try {
-      const response = await api.get('/api/v1/users/me')
-      localStorage.setItem('user', JSON.stringify(response.data))
+      const response = await api.get('/api/v1/auth/me')
+      if (response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user))
+        return response.data.user
+      }
       return response.data
     } catch (error) {
       throw error
@@ -70,7 +80,11 @@ const authService = {
   async updateProfile(userData) {
     try {
       const response = await api.put('/api/v1/users/me', userData)
-      localStorage.setItem('user', JSON.stringify(response.data))
+      // Backend returns {user: {...}, message: "..."}
+      if (response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user))
+        return response.data.user
+      }
       return response.data
     } catch (error) {
       throw error
@@ -81,9 +95,9 @@ const authService = {
   mockLogin(phone, password) {
     // Fixed credentials untuk demo
     const validCredentials = [
-      { phone: '08123456789', password: 'user123', name: 'Demo User', segment: 2 },
-      { phone: 'admin', password: 'admin123', name: 'Admin User', segment: 1 },
-      { phone: '08111111111', password: 'demo', name: 'Test User', segment: 3 },
+      { phone: '08123456789', password: 'user123', name: 'Demo User', segment: 2, role: 'user' },
+      { phone: 'admin', password: 'admin123', name: 'Admin User', segment: 1, role: 'admin' },
+      { phone: '08111111111', password: 'demo', name: 'Test User', segment: 3, role: 'user' },
     ]
 
     // Check credentials
@@ -100,6 +114,7 @@ const authService = {
       phone: credential.phone,
       name: credential.name,
       segment: credential.segment,
+      role: credential.role,
       balance: 100000,
     }
     const mockToken = 'mock-jwt-token-' + Date.now()

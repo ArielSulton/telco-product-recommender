@@ -1,59 +1,594 @@
 {
-  "title": "ML Models Performance",
+  "title": "🤖 ML Models Performance",
   "uid": "ml-models",
-  "schemaVersion": 16,
-  "version": 1,
+  "schemaVersion": 38,
+  "version": 2,
   "timezone": "browser",
   "editable": true,
-  "refresh": "1m",
+  "graphTooltip": 1,
+  "refresh": "30s",
   "time": {
-    "from": "now-6h",
+    "from": "now-1h",
     "to": "now"
   },
+  "tags": ["ml", "models", "performance"],
   "panels": [
     {
       "id": 1,
-      "title": "Model Inference Latency by Stage",
-      "type": "graph",
-      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "title": "🎯 Model Inference Rate",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 0, "w": 4, "h": 4},
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "rate(model_inference_duration_seconds_sum{stage='segmentation'}[5m]) / rate(model_inference_duration_seconds_count{stage='segmentation'}[5m])",
-          "legendFormat": "Segmentation (K-Means)",
-          "refId": "A"
-        },
-        {
-          "expr": "rate(model_inference_duration_seconds_sum{stage='collaborative'}[5m]) / rate(model_inference_duration_seconds_count{stage='collaborative'}[5m])",
-          "legendFormat": "Collaborative (LightFM)",
-          "refId": "B"
-        },
-        {
-          "expr": "rate(model_inference_duration_seconds_sum{stage='ranking'}[5m]) / rate(model_inference_duration_seconds_count{stage='ranking'}[5m])",
-          "legendFormat": "Ranking (XGBoost)",
-          "refId": "C"
-        }
-      ]
-    },
-    {
-      "id": 2,
-      "title": "NDCG@5 Quality Metric",
-      "type": "graph",
-      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "avg_over_time(model_ndcg_at_5[1h])",
-          "legendFormat": "NDCG@5 (Hourly Avg)",
+          "expr": "sum(rate(model_inference_duration_seconds_count[5m]))",
           "refId": "A"
         }
       ],
-      "yaxes": [
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "green"},
+              {"value": 10, "color": "yellow"},
+              {"value": 50, "color": "red"}
+            ]
+          },
+          "unit": "reqps",
+          "decimals": 2
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "⚡ Avg Inference Time",
+      "type": "stat",
+      "gridPos": {"x": 4, "y": 0, "w": 4, "h": 4},
+      "datasource": "Prometheus",
+      "targets": [
         {
+          "expr": "avg(rate(model_inference_duration_seconds_sum[5m]) / rate(model_inference_duration_seconds_count[5m])) * 1000",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "green"},
+              {"value": 100, "color": "yellow"},
+              {"value": 500, "color": "red"}
+            ]
+          },
+          "unit": "ms",
+          "decimals": 1
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "📊 NDCG@5 Quality",
+      "type": "gauge",
+      "gridPos": {"x": 8, "y": 0, "w": 4, "h": 4},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "avg_over_time(model_ndcg_at_5[5m])",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "red"},
+              {"value": 0.5, "color": "yellow"},
+              {"value": 0.7, "color": "green"}
+            ]
+          },
+          "unit": "percentunit",
+          "decimals": 3
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "🔄 Cache Hit Rate",
+      "type": "stat",
+      "gridPos": {"x": 12, "y": 0, "w": 4, "h": 4},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "(sum(rate(model_cache_hits_total[5m])) / (sum(rate(model_cache_hits_total[5m])) + sum(rate(model_cache_misses_total[5m])))) * 100",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "red"},
+              {"value": 50, "color": "yellow"},
+              {"value": 80, "color": "green"}
+            ]
+          },
+          "unit": "percent",
+          "decimals": 1
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "🎲 MMR Diversity Score",
+      "type": "stat",
+      "gridPos": {"x": 16, "y": 0, "w": 4, "h": 4},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "avg_over_time(model_mmr_diversity_score[5m])",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "unit": "short",
+          "decimals": 2,
           "min": 0,
           "max": 1
         }
-      ]
+      }
+    },
+    {
+      "id": 6,
+      "title": "📈 Total Predictions (24h)",
+      "type": "stat",
+      "gridPos": {"x": 20, "y": 0, "w": 4, "h": 4},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(increase(model_inference_duration_seconds_count[24h]))",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "blue"},
+              {"value": 1000, "color": "green"},
+              {"value": 10000, "color": "yellow"}
+            ]
+          },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Model Inference Latency by Stage",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "(rate(model_inference_duration_seconds_sum{stage='segmentation'}[5m]) / rate(model_inference_duration_seconds_count{stage='segmentation'}[5m])) * 1000",
+          "legendFormat": "🔹 Segmentation (K-Means)",
+          "refId": "A"
+        },
+        {
+          "expr": "(rate(model_inference_duration_seconds_sum{stage='collaborative'}[5m]) / rate(model_inference_duration_seconds_count{stage='collaborative'}[5m])) * 1000",
+          "legendFormat": "🔸 Collaborative (LightFM)",
+          "refId": "B"
+        },
+        {
+          "expr": "(rate(model_inference_duration_seconds_sum{stage='ranking'}[5m]) / rate(model_inference_duration_seconds_count{stage='ranking'}[5m])) * 1000",
+          "legendFormat": "🔶 Ranking (XGBoost)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "ms"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "🔹 Segmentation (K-Means)"},
+            "properties": [{"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "🔸 Collaborative (LightFM)"},
+            "properties": [{"id": "color", "value": {"fixedColor": "purple", "mode": "fixed"}}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "🔶 Ranking (XGBoost)"},
+            "properties": [{"id": "color", "value": {"fixedColor": "orange", "mode": "fixed"}}]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "multi"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 8,
+      "title": "Inference Rate by Model Stage",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(model_inference_duration_seconds_count{stage='segmentation'}[5m]))",
+          "legendFormat": "Segmentation",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(model_inference_duration_seconds_count{stage='collaborative'}[5m]))",
+          "legendFormat": "Collaborative",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(model_inference_duration_seconds_count{stage='ranking'}[5m]))",
+          "legendFormat": "Ranking",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 5
+          },
+          "unit": "reqps"
+        }
+      },
+      "options": {
+        "tooltip": {"mode": "multi"},
+        "legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"]}
+      }
+    },
+    {
+      "id": 9,
+      "title": "NDCG@5 Trend with Thresholds",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "avg_over_time(model_ndcg_at_5[5m])",
+          "legendFormat": "NDCG@5",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 20
+          },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "red"},
+              {"value": 0.5, "color": "yellow"},
+              {"value": 0.7, "color": "green"}
+            ]
+          }
+        }
+      },
+      "options": {
+        "tooltip": {"mode": "single"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      },
+      "description": "Normalized Discounted Cumulative Gain @ 5 - measures recommendation quality"
+    },
+    {
+      "id": 10,
+      "title": "Precision@5 and Recall@5",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "avg_over_time(model_precision_at_5[5m])",
+          "legendFormat": "Precision@5",
+          "refId": "A"
+        },
+        {
+          "expr": "avg_over_time(model_recall_at_5[5m])",
+          "legendFormat": "Recall@5",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Precision@5"},
+            "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Recall@5"},
+            "properties": [{"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "multi"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      },
+      "description": "Precision: relevance of top 5 recommendations | Recall: coverage of relevant items in top 5"
+    },
+    {
+      "id": 11,
+      "title": "Cache Performance (Hits vs Misses)",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 20, "w": 8, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(model_cache_hits_total[5m]))",
+          "legendFormat": "Cache Hits",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(model_cache_misses_total[5m]))",
+          "legendFormat": "Cache Misses",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 5
+          },
+          "unit": "cpm"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Cache Hits"},
+            "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Cache Misses"},
+            "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "multi"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 12,
+      "title": "MMR Diversification Impact",
+      "type": "bargauge",
+      "gridPos": {"x": 8, "y": 20, "w": 8, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "avg_over_time(model_mmr_diversity_score[5m])",
+          "legendFormat": "Diversity Score",
+          "refId": "A"
+        },
+        {
+          "expr": "avg_over_time(model_mmr_lambda[5m])",
+          "legendFormat": "MMR Lambda (α)",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "min": 0,
+          "max": 1,
+          "unit": "short",
+          "decimals": 3
+        }
+      },
+      "description": "Maximal Marginal Relevance diversification metrics"
+    },
+    {
+      "id": 13,
+      "title": "Error Rate by Model Stage",
+      "type": "timeseries",
+      "gridPos": {"x": 16, "y": 20, "w": 8, "h": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(model_inference_errors_total{stage='segmentation'}[5m]))",
+          "legendFormat": "Segmentation Errors",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(model_inference_errors_total{stage='collaborative'}[5m]))",
+          "legendFormat": "Collaborative Errors",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(model_inference_errors_total{stage='ranking'}[5m]))",
+          "legendFormat": "Ranking Errors",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10
+          },
+          "unit": "cpm"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": "/.*Error.*/"},
+            "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "multi"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 14,
+      "title": "Model Load Time",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 28, "w": 8, "h": 6},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "avg(model_load_duration_seconds) * 1000",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "green"},
+              {"value": 1000, "color": "yellow"},
+              {"value": 5000, "color": "red"}
+            ]
+          },
+          "unit": "ms",
+          "decimals": 0
+        }
+      },
+      "description": "Time to load ML models into memory"
+    },
+    {
+      "id": 15,
+      "title": "Feature Usage Distribution",
+      "type": "piechart",
+      "gridPos": {"x": 8, "y": 28, "w": 8, "h": 6},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(increase(model_feature_usage_total[1h])) by (feature_name)",
+          "legendFormat": "{{feature_name}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]},
+        "pieType": "donut",
+        "displayLabels": ["percent"]
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "unit": "short"
+        }
+      },
+      "description": "Distribution of feature usage across model predictions"
+    },
+    {
+      "id": 16,
+      "title": "Model Prediction Confidence",
+      "type": "stat",
+      "gridPos": {"x": 16, "y": 28, "w": 8, "h": 6},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "avg(model_prediction_confidence)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "red"},
+              {"value": 0.5, "color": "yellow"},
+              {"value": 0.7, "color": "green"}
+            ]
+          },
+          "unit": "percentunit",
+          "decimals": 3,
+          "min": 0,
+          "max": 1
+        }
+      },
+      "description": "Average confidence score of model predictions"
     }
   ]
 }
