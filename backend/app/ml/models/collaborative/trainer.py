@@ -204,9 +204,58 @@ class CollaborativeFilteringTrainer:
             ).mean()
 
             # Calculate NDCG@5
-            from sklearn.metrics import ndcg_score
-            # Simplified NDCG calculation
-            test_ndcg_5 = 0.0  # TODO: Implement proper NDCG calculation
+            # ✅ Proper NDCG calculation for recommender systems
+            def calculate_ndcg_at_k(model, test_matrix, k=5, sample_users=100):
+                """
+                Calculate NDCG@K for collaborative filtering model.
+
+                Args:
+                    model: Trained LightFM model
+                    test_matrix: Test interaction matrix (sparse)
+                    k: Number of top items to consider
+                    sample_users: Number of users to sample for calculation
+
+                Returns:
+                    float: Mean NDCG@K score
+                """
+                from sklearn.metrics import ndcg_score
+                import scipy.sparse as sp
+
+                n_users, n_items = test_matrix.shape
+                ndcg_scores = []
+
+                # Sample users who have interactions in test set
+                test_users = np.where(test_matrix.getnnz(axis=1) > 0)[0]
+                if len(test_users) > sample_users:
+                    sampled_users = np.random.choice(test_users, size=sample_users, replace=False)
+                else:
+                    sampled_users = test_users
+
+                for user_id in sampled_users:
+                    # Get ground truth relevance (1 for interacted items, 0 for others)
+                    true_relevance = test_matrix[user_id].toarray().flatten()
+
+                    # Get model predictions for all items
+                    predictions = model.predict(user_id, np.arange(n_items))
+
+                    # NDCG requires at least one positive example
+                    if true_relevance.sum() > 0:
+                        # Calculate NDCG@K (sklearn expects shape (1, n_items))
+                        ndcg = ndcg_score(
+                            true_relevance.reshape(1, -1),
+                            predictions.reshape(1, -1),
+                            k=k
+                        )
+                        ndcg_scores.append(ndcg)
+
+                return np.mean(ndcg_scores) if ndcg_scores else 0.0
+
+            test_ndcg_5 = calculate_ndcg_at_k(
+                recommender.model,
+                test_matrix,
+                k=5,
+                sample_users=min(100, test_matrix.shape[0])
+            )
 
             # Log test metrics
             mlflow.log_metrics({

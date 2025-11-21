@@ -285,14 +285,15 @@ async def get_recommendations(
 
     except Exception as e:
         # Unexpected error
+        error_type = type(e).__name__
         logger.error(
-            f"Unexpected error: {str(e)}",
+            f"Unexpected error: {error_type} - {str(e)}",
             extra={"request_id": request_id},
             exc_info=True
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
+            detail=f"Internal server error: {error_type}"
         )
 
 
@@ -403,51 +404,9 @@ async def get_metrics(
         return metrics
 
     except Exception as e:
-        logger.error(f"Failed to get metrics: {str(e)}", exc_info=True)
+        error_type = type(e).__name__
+        logger.error(f"Failed to get metrics: {error_type} - {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve metrics"
+            detail=f"Failed to retrieve metrics: {error_type}"
         )
-
-
-# ==============================================
-# UTILITY FUNCTIONS
-# ==============================================
-
-async def initialize_recommendation_service(
-    pipeline: HybridPipeline,
-    redis_client: redis.Redis
-) -> None:
-    """
-    Initialize global recommendation service instance.
-
-    Should be called during application startup.
-
-    Args:
-        pipeline: Configured HybridPipeline
-        redis_client: Redis client for caching
-    """
-    global _recommendation_service
-
-    _recommendation_service = RecommendationService(
-        pipeline=pipeline,
-        redis_client=redis_client,
-        cache_ttl=settings.REDIS_CACHE_TTL
-    )
-
-    logger.info("Recommendation service initialized")
-
-
-async def shutdown_recommendation_service() -> None:
-    """
-    Cleanup recommendation service.
-
-    Should be called during application shutdown.
-    """
-    global _recommendation_service
-
-    if _recommendation_service:
-        # Cleanup if needed
-        _recommendation_service = None
-
-    logger.info("Recommendation service shut down")

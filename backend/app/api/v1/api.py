@@ -13,7 +13,7 @@ Features:
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import recommendations, events, webhooks, auth, users, purchases, admin
+from app.api.v1.endpoints import recommendations, events, webhooks, auth, users, purchases, admin, products
 
 # Create main API router
 api_router = APIRouter()
@@ -41,6 +41,11 @@ api_router.include_router(
     admin.router,
     prefix="/admin",
     tags=["Admin"]
+)
+
+api_router.include_router(
+    products.router,
+    tags=["Products"]
 )
 
 api_router.include_router(
@@ -92,6 +97,10 @@ async def api_status():
             "purchases": {
                 "create": "/api/v1/purchases",
                 "history": "/api/v1/purchases/history"
+            },
+            "products": {
+                "list": "/api/v1/products",
+                "detail": "/api/v1/products/{product_id}"
             },
             "recommendations": "/api/v1/recommend",
             "events": "/api/v1/events",

@@ -239,7 +239,7 @@ class HybridPipeline:
         # Check cache
         cache_key = f"segment:{user_id}"
         if self.cache_client:
-            cached_segment = self.cache_client.get(cache_key)
+            cached_segment = await self.cache_client.get(cache_key)
             if cached_segment is not None:
                 return int(cached_segment)
 
@@ -248,7 +248,7 @@ class HybridPipeline:
 
         # Cache result
         if self.cache_client:
-            self.cache_client.setex(cache_key, self.cache_ttl, str(segment_id))
+            await self.cache_client.setex(cache_key, self.cache_ttl, str(segment_id))
 
         return segment_id
 
@@ -263,7 +263,7 @@ class HybridPipeline:
         # Check cache
         cache_key = f"candidates:{user_id}:{pool_size}"
         if self.cache_client:
-            cached_candidates = self.cache_client.get(cache_key)
+            cached_candidates = await self.cache_client.get(cache_key)
             if cached_candidates is not None:
                 import json
                 return json.loads(cached_candidates)
@@ -308,7 +308,7 @@ class HybridPipeline:
         # Cache result
         if self.cache_client:
             import json
-            self.cache_client.setex(
+            await self.cache_client.setex(
                 cache_key,
                 self.cache_ttl,
                 json.dumps(candidates)

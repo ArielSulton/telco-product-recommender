@@ -1,0 +1,18 @@
+{
+  "name": "Paketify - Smart Telco Package Recommendations",
+  "short_name": "Paketify",
+  "description": "Find the perfect telco package tailored to your needs with AI-powered recommendations",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4a9d7e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -93,7 +93,12 @@ const authService = {
 
   // Mock login (for development without backend)
   mockLogin(phone, password) {
-    // Fixed credentials untuk demo
+    // ✅ SECURITY: Only available in development mode
+    if (import.meta.env.MODE !== 'development') {
+      throw new Error('Mock login is not available in production. Please use real authentication.')
+    }
+
+    // Development-only credentials (NOT exposed in production builds)
     const validCredentials = [
       { phone: '08123456789', password: 'user123', name: 'Demo User', segment: 2, role: 'user' },
       { phone: 'admin', password: 'admin123', name: 'Admin User', segment: 1, role: 'admin' },

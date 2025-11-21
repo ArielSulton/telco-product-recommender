@@ -222,7 +222,6 @@ const DashboardPage = () => {
         <RecommendationWidget
           title="Recommended"
           limit={3}
-          useMock={true}
         />
 
         {/* Recent Transactions */}

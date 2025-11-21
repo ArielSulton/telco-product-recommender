@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
@@ -7,8 +7,21 @@ import recommendationService from '../services/recommendationService'
 import { ArrowRight, Zap, Shield, TrendingUp } from 'lucide-react'
 
 const HomePage = () => {
-  // Use mock data for guest homepage
-  const mockProducts = recommendationService.mockProducts().products.slice(0, 4)
+  // Fetch products for guest homepage
+  const [featuredProducts, setFeaturedProducts] = useState([])
+
+  useEffect(() => {
+    const loadFeaturedProducts = async () => {
+      try {
+        const data = await recommendationService.getProducts({ limit: 4 })
+        setFeaturedProducts(data.products || [])
+      } catch (error) {
+        console.error('Failed to load featured products:', error)
+        setFeaturedProducts([])
+      }
+    }
+    loadFeaturedProducts()
+  }, [])
 
   return (
     <div className="min-h-screen flex flex-col bg-cyan-50">
@@ -63,7 +76,7 @@ const HomePage = () => {
           <h2 className="section-title text-center mb-8">Our Product</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {mockProducts.map((product, index) => (
+            {featuredProducts.map((product, index) => (
               <div key={product.product_id} className="card hover-lift animate-scale-in" style={{ animationDelay: `${0.1 * (index + 1)}s` }}>
                 <div className="mb-4">
                   <h3 className="text-xl font-bold text-gray-900 mb-2">

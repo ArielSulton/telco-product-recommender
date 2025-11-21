@@ -24,6 +24,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import Counter, Histogram, make_asgi_app
 from starlette.exceptions import HTTPException as StarletteHTTPException
+import httpx
 
 from app.core.config import settings
 from app.core.logging import logger
@@ -353,8 +354,18 @@ async def readiness_check():
     except Exception:
         checks["redis"] = "unhealthy"
 
-    # TODO: Check MLflow
-    checks["mlflow"] = "healthy"  # Placeholder
+    # ✅ Check MLflow tracking server
+    try:
+        mlflow_uri = settings.MLFLOW_TRACKING_URI
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{mlflow_uri}/health")
+            if response.status_code == 200:
+                checks["mlflow"] = "healthy"
+            else:
+                checks["mlflow"] = "unhealthy"
+    except Exception as e:
+        logger.warning(f"MLflow health check failed: {e}")
+        checks["mlflow"] = "unhealthy"
 
     all_healthy = all(status == "healthy" for status in checks.values())
 

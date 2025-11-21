@@ -14,8 +14,9 @@ export const RecommendationProvider = ({ children }) => {
 
   // Fetch recommendations
   const fetchRecommendations = useCallback(
-    async (context = {}, limit = 5, useMock = false) => {
-      if (!user?.id && !useMock) {
+    async (context = {}, limit = 5) => {
+      // ✅ Single user check at the top (removed duplicate)
+      if (!user?.id) {
         setRecommendations([])
         return
       }
@@ -24,18 +25,12 @@ export const RecommendationProvider = ({ children }) => {
         setLoading(true)
         setError(null)
 
-        let data
-        if (useMock || !user?.id) {
-          // Use mock data for development or non-authenticated users
-          data = recommendationService.mockRecommendations()
-        } else {
-          // Fetch from API
-          data = await recommendationService.getRecommendations(
-            user.id,
-            context,
-            limit
-          )
-        }
+        // Fetch from API
+        const data = await recommendationService.getRecommendations(
+          user.id,
+          context,
+          limit
+        )
 
         setRecommendations(data.recommendations || [])
         setVariant(data.ab_variant)
@@ -43,10 +38,7 @@ export const RecommendationProvider = ({ children }) => {
       } catch (err) {
         setError(err.message || 'Failed to fetch recommendations')
         console.error('Recommendation fetch error:', err)
-
-        // Fallback to mock data on error
-        const mockData = recommendationService.mockRecommendations()
-        setRecommendations(mockData.recommendations || [])
+        setRecommendations([])
       } finally {
         setLoading(false)
       }

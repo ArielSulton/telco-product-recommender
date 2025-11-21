@@ -233,9 +233,29 @@ async def get_current_user_id(
     Raises:
         HTTPException: If user not found
     """
-    # TODO: Query database to verify user exists
-    # For now, accept any valid UUID
-    return user_id
+    # ✅ Query database to verify user exists
+    try:
+        result = await db.execute(
+            "SELECT id FROM users WHERE id = :user_id",
+            {"user_id": str(user_id)}
+        )
+        user = result.fetchone()
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User not found: {user_id}"
+            )
+
+        return user_id
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error validating user {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to validate user"
+        )
 
 
 # ==============================================
@@ -259,9 +279,37 @@ async def get_valid_product_id(
     Raises:
         HTTPException: If product not found or inactive
     """
-    # TODO: Query database to verify product exists and is active
-    # For now, accept any product ID
-    return product_id
+    # ✅ Query database to verify product exists and is active
+    try:
+        result = await db.execute(
+            "SELECT product_id, is_active FROM products WHERE product_id = :product_id",
+            {"product_id": product_id}
+        )
+        product = result.fetchone()
+
+        if not product:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Product not found: {product_id}"
+            )
+
+        # Check if product is active
+        is_active = product[1] if len(product) > 1 else True
+        if not is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Product is inactive: {product_id}"
+            )
+
+        return product_id
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error validating product {product_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to validate product"
+        )
 
 
 # ==============================================

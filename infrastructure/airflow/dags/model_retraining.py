@@ -29,6 +29,10 @@ import pandas as pd
 import numpy as np
 import requests
 import json
+import logging
+
+# ✅ Configure logging
+logger = logging.getLogger(__name__)
 
 # MLflow imports
 import mlflow
@@ -235,16 +239,82 @@ def train_collaborative_model(**context):
         interactions = transactions_df[['user_id', 'product_id']].copy()
         interactions['rating'] = 1.0  # Implicit feedback
 
-        # Train
-        recommender.fit(interactions)
+        # ✅ Split into train/test sets (chronological split for realistic evaluation)
+        if 'transaction_date' in transactions_df.columns:
+            interactions['transaction_date'] = transactions_df['transaction_date']
+            interactions = interactions.sort_values('transaction_date')
+            interactions = interactions.drop('transaction_date', axis=1)
 
-        # Evaluate
-        # TODO: Implement proper evaluation with test set
+        split_idx = int(len(interactions) * 0.8)
+        train_interactions = interactions.iloc[:split_idx].copy()
+        test_interactions = interactions.iloc[split_idx:].copy()
 
-        # Log metrics
+        print(f"📊 Train: {len(train_interactions)} interactions, Test: {len(test_interactions)} interactions")
+
+        # ✅ Prepare training data
+        train_matrix, user_feat_matrix, item_feat_matrix = recommender.prepare_data(
+            train_interactions,
+            user_features=None,
+            item_features=None
+        )
+
+        # ✅ Train on training set only
+        train_metrics = recommender.train(
+            interaction_matrix=train_matrix,
+            user_features=user_feat_matrix,
+            item_features=item_feat_matrix,
+            epochs=30,
+            num_threads=4,
+            verbose=True
+        )
+
+        # ✅ Prepare test data (reuse same dataset for consistent mappings)
+        test_matrix, _, _ = recommender.prepare_data(test_interactions)
+
+        # ✅ Evaluate on test set
+        from lightfm.evaluation import precision_at_k, recall_at_k, auc_score
+
+        test_precision_5 = precision_at_k(
+            recommender.model,
+            test_matrix,
+            user_features=user_feat_matrix,
+            item_features=item_feat_matrix,
+            k=5
+        ).mean()
+
+        test_recall_10 = recall_at_k(
+            recommender.model,
+            test_matrix,
+            user_features=user_feat_matrix,
+            item_features=item_feat_matrix,
+            k=10
+        ).mean()
+
+        test_auc = auc_score(
+            recommender.model,
+            test_matrix,
+            user_features=user_feat_matrix,
+            item_features=item_feat_matrix
+        ).mean()
+
+        print(f"📈 Test Metrics: P@5={test_precision_5:.4f}, R@10={test_recall_10:.4f}, AUC={test_auc:.4f}")
+
+        # ✅ Log parameters
         mlflow.log_param("no_components", 50)
         mlflow.log_param("loss", "warp")
-        mlflow.log_param("training_interactions", len(interactions))
+        mlflow.log_param("training_interactions", len(train_interactions))
+        mlflow.log_param("test_interactions", len(test_interactions))
+        mlflow.log_param("epochs", 30)
+
+        # ✅ Log training metrics
+        mlflow.log_metric("train_precision_at_5", train_metrics['train_precision_at_5'])
+        mlflow.log_metric("train_recall_at_10", train_metrics['train_recall_at_10'])
+        mlflow.log_metric("train_auc", train_metrics['train_auc'])
+
+        # ✅ Log test metrics
+        mlflow.log_metric("test_precision_at_5", float(test_precision_5))
+        mlflow.log_metric("test_recall_at_10", float(test_recall_10))
+        mlflow.log_metric("test_auc", float(test_auc))
 
         # Save model (LightFM requires custom serialization)
         import pickle
@@ -256,9 +326,13 @@ def train_collaborative_model(**context):
 
         run_id = mlflow.active_run().info.run_id
 
-        print(f"✅ LightFM trained - {len(interactions)} interactions")
+        print(f"✅ LightFM trained - {len(train_interactions)} train + {len(test_interactions)} test interactions")
+        print(f"   Train: P@5={train_metrics['train_precision_at_5']:.4f}, R@10={train_metrics['train_recall_at_10']:.4f}")
+        print(f"   Test: P@5={test_precision_5:.4f}, R@10={test_recall_10:.4f}, AUC={test_auc:.4f}")
 
         context['ti'].xcom_push(key='lightfm_run_id', value=run_id)
+        context['ti'].xcom_push(key='lightfm_test_precision', value=float(test_precision_5))
+        context['ti'].xcom_push(key='lightfm_test_recall', value=float(test_recall_10))
 
 
 def train_ranker_model(**context):
@@ -267,28 +341,169 @@ def train_ranker_model(**context):
 
     # Load data
     transactions_df = pd.read_parquet('/tmp/training_transactions.parquet')
-    features_df = pd.read_parquet('/tmp/training_features.parquet')
+    events_df = pd.read_parquet('/tmp/training_events.parquet')
 
     mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow:5000'))
     mlflow.set_experiment('model_retraining')
 
     # Train model
-    ranker = XGBoostRanker()
+    ranker = XGBoostRanker(
+        objective='rank:pairwise',
+        learning_rate=0.1,
+        max_depth=6,
+        n_estimators=100
+    )
 
     with mlflow.start_run(run_name=f"xgboost_retraining_{datetime.now().strftime('%Y%m%d')}"):
-        # Prepare training data
-        # TODO: Implement proper feature engineering for ranking
+        # ✅ Prepare training interactions with labels
+        # Positive samples: actual purchases (label=1)
+        positive_interactions = transactions_df[['user_id', 'product_id']].copy()
+        positive_interactions['label'] = 1
 
-        # For now, use simplified training
+        # Negative samples: viewed but not purchased (label=0)
+        viewed_products = events_df[
+            (events_df['event_type'] == 'product_view') &
+            (~events_df['product_id'].isin(positive_interactions['product_id']))
+        ][['user_id', 'product_id']].copy()
+        viewed_products['label'] = 0
+
+        # Combine positive and negative samples
+        interactions = pd.concat([positive_interactions, viewed_products], ignore_index=True)
+        interactions = interactions.drop_duplicates(subset=['user_id', 'product_id'])
+
+        # ✅ Prepare user features (RFM, ARPU, usage)
+        user_features = transactions_df.groupby('user_id').agg({
+            'transaction_date': lambda x: (datetime.now() - x.max()).days,  # Recency
+            'product_id': 'count',  # Frequency
+            'amount': 'sum'  # Monetary
+        }).reset_index()
+        user_features.columns = ['user_id', 'recency', 'frequency', 'monetary']
+        user_features['arpu'] = user_features['monetary'] / user_features['frequency'].clip(lower=1)
+
+        # Add segment_id if available (from context or default)
+        user_features['segment_id'] = 2  # Default segment
+        user_features['usage_7d_data_mb'] = 1000  # Default usage
+        user_features['churn_score'] = 0.5  # Default churn score
+
+        # ✅ Prepare product features
+        # Get unique products from transactions
+        product_features = pd.DataFrame({
+            'product_id': transactions_df['product_id'].unique()
+        })
+        product_features['price'] = 50000  # Default price
+        product_features['quota_data_mb'] = 5000  # Default quota
+        product_features['quota_voice_min'] = 100  # Default voice
+        product_features['validity_days'] = 30  # Default validity
+        product_features['product_family'] = 'data'  # Default family
+
+        # ✅ Feature engineering and preparation
+        X, y, groups = ranker.prepare_features(
+            interactions=interactions,
+            user_features=user_features,
+            product_features=product_features,
+            cf_scores=None  # No CF scores in first iteration
+        )
+
+        print(f"📊 Features: {X.shape[1]} columns, {len(X)} samples, {len(groups)} user groups")
+
+        # ✅ Train/test split (by groups to prevent leakage)
+        n_groups = len(groups)
+        split_idx = int(n_groups * 0.8)
+
+        # Split groups
+        train_groups = groups[:split_idx]
+        test_groups = groups[split_idx:]
+
+        # Split samples based on group boundaries
+        train_end = train_groups.sum()
+        X_train = X.iloc[:train_end]
+        y_train = y.iloc[:train_end]
+        X_test = X.iloc[train_end:]
+        y_test = y.iloc[train_end:]
+
+        print(f"📊 Train: {len(X_train)} samples, {len(train_groups)} groups")
+        print(f"📊 Test: {len(X_test)} samples, {len(test_groups)} groups")
+
+        # ✅ Train model with evaluation
+        eval_set = [(X_test, y_test, test_groups)]
+        train_metrics = ranker.train(
+            X=X_train,
+            y=y_train,
+            groups=train_groups,
+            eval_set=eval_set,
+            verbose=True
+        )
+
+        # ✅ Evaluate on test set
+        from sklearn.metrics import ndcg_score
+
+        # Rank on test set
+        y_pred = ranker.rank(X_test)
+
+        # Calculate NDCG@5 and NDCG@10
+        # Group predictions by user for ranking evaluation
+        test_data = X_test.copy()
+        test_data['y_true'] = y_test.values
+        test_data['y_pred'] = y_pred
+
+        ndcg_5_scores = []
+        ndcg_10_scores = []
+
+        # Calculate NDCG per user group
+        start_idx = 0
+        for group_size in test_groups:
+            end_idx = start_idx + group_size
+            group_true = test_data.iloc[start_idx:end_idx]['y_true'].values
+            group_pred = test_data.iloc[start_idx:end_idx]['y_pred'].values
+
+            if group_true.sum() > 0:  # Only if there are positive samples
+                ndcg_5 = ndcg_score([group_true], [group_pred], k=5)
+                ndcg_10 = ndcg_score([group_true], [group_pred], k=10)
+                ndcg_5_scores.append(ndcg_5)
+                ndcg_10_scores.append(ndcg_10)
+
+            start_idx = end_idx
+
+        test_ndcg_5 = np.mean(ndcg_5_scores) if ndcg_5_scores else 0.0
+        test_ndcg_10 = np.mean(ndcg_10_scores) if ndcg_10_scores else 0.0
+
+        print(f"📈 Test NDCG@5: {test_ndcg_5:.4f}, NDCG@10: {test_ndcg_10:.4f}")
+
+        # ✅ Log parameters
         mlflow.log_param("objective", "rank:pairwise")
         mlflow.log_param("learning_rate", 0.1)
         mlflow.log_param("max_depth", 6)
+        mlflow.log_param("n_estimators", 100)
+        mlflow.log_param("n_features", X.shape[1])
+        mlflow.log_param("n_train_samples", len(X_train))
+        mlflow.log_param("n_test_samples", len(X_test))
+        mlflow.log_param("n_train_groups", len(train_groups))
+        mlflow.log_param("n_test_groups", len(test_groups))
+
+        # ✅ Log training metrics
+        for metric_name, metric_value in train_metrics.items():
+            if isinstance(metric_value, (int, float)):
+                mlflow.log_metric(f"train_{metric_name}", metric_value)
+
+        # ✅ Log test metrics
+        mlflow.log_metric("test_ndcg_at_5", test_ndcg_5)
+        mlflow.log_metric("test_ndcg_at_10", test_ndcg_10)
+
+        # Save model
+        import pickle
+        model_path = "/tmp/xgboost_ranker.pkl"
+        with open(model_path, 'wb') as f:
+            pickle.dump(ranker, f)
+
+        mlflow.log_artifact(model_path, "model")
 
         run_id = mlflow.active_run().info.run_id
 
-        print(f"✅ XGBoost trained")
+        print(f"✅ XGBoost trained - {X.shape[1]} features, NDCG@5={test_ndcg_5:.4f}")
 
         context['ti'].xcom_push(key='xgboost_run_id', value=run_id)
+        context['ti'].xcom_push(key='xgboost_test_ndcg_5', value=float(test_ndcg_5))
+        context['ti'].xcom_push(key='xgboost_test_ndcg_10', value=float(test_ndcg_10))
 
 
 def validate_models(**context):
@@ -341,8 +556,41 @@ def validate_models(**context):
             return 'promote_models'
 
     except Exception as e:
-        print(f"⚠️ Validation error: {e}")
+        # ✅ Enhanced error handling with comprehensive logging
+        error_type = type(e).__name__
+        error_context = {
+            'error_type': error_type,
+            'error_message': str(e),
+            'kmeans_run_id': kmeans_run_id,
+            'timestamp': datetime.now().isoformat(),
+            'validation_stage': 'model_comparison'
+        }
+
+        # Log error with full context and stack trace
+        logger.error(
+            f"Model validation failed: {error_type} - {str(e)}",
+            extra=error_context,
+            exc_info=True
+        )
+
+        # Log to MLflow for tracking
+        try:
+            with mlflow.start_run(run_name=f"validation_failed_{datetime.now().strftime('%Y%m%d_%H%M%S')}"):
+                mlflow.log_param("status", "validation_error")
+                mlflow.log_param("error_type", error_type)
+                mlflow.log_param("error_message", str(e))
+                mlflow.log_param("kmeans_run_id", kmeans_run_id)
+        except Exception as mlflow_error:
+            logger.warning(f"Failed to log error to MLflow: {mlflow_error}")
+
+        # Push error context to XCom for downstream tasks
+        context['ti'].xcom_push(key='validation_error', value=error_context)
+        context['ti'].xcom_push(key='validation_passed', value=False)
+
+        print(f"⚠️ Validation error: {error_type} - {str(e)}")
         print("⚠️ Skipping promotion as safety measure")
+        print(f"⚠️ Error logged with context: {error_context}")
+
         return 'rollback_training'
 
 
@@ -358,31 +606,53 @@ def promote_models(**context):
     lightfm_run_id = context['ti'].xcom_pull(key='lightfm_run_id')
     xgboost_run_id = context['ti'].xcom_pull(key='xgboost_run_id')
 
-    # Promote K-Means
-    try:
-        # Archive old production model
-        prod_versions = client.get_latest_versions("kmeans_segmentation", stages=["Production"])
-        for version in prod_versions:
-            client.transition_model_version_stage(
-                name="kmeans_segmentation",
-                version=version.version,
-                stage="Archived"
-            )
+    # ✅ Promote all models using consistent logic
+    models_to_promote = [
+        ('kmeans_segmentation', kmeans_run_id, 'K-Means'),
+        ('lightfm_collaborative', lightfm_run_id, 'LightFM'),
+        ('xgboost_ranker', xgboost_run_id, 'XGBoost')
+    ]
 
-        # Promote new model
-        # Get version number for the run
-        model_versions = client.search_model_versions(f"run_id='{kmeans_run_id}'")
-        if model_versions:
-            client.transition_model_version_stage(
-                name="kmeans_segmentation",
-                version=model_versions[0].version,
-                stage="Production"
-            )
-            print(f"✅ K-Means model v{model_versions[0].version} promoted to Production")
-    except Exception as e:
-        print(f"⚠️ K-Means promotion error: {e}")
+    promoted_count = 0
+    failed_models = []
 
-    # TODO: Promote LightFM and XGBoost models similarly
+    for model_name, run_id, display_name in models_to_promote:
+        try:
+            print(f"🔄 Promoting {display_name} model...")
+
+            # Archive old production version
+            prod_versions = client.get_latest_versions(model_name, stages=["Production"])
+            for version in prod_versions:
+                client.transition_model_version_stage(
+                    name=model_name,
+                    version=version.version,
+                    stage="Archived"
+                )
+                print(f"  📦 Archived old {display_name} v{version.version}")
+
+            # Promote new model
+            model_versions = client.search_model_versions(f"run_id='{run_id}'")
+            if model_versions:
+                client.transition_model_version_stage(
+                    name=model_name,
+                    version=model_versions[0].version,
+                    stage="Production"
+                )
+                print(f"  ✅ {display_name} v{model_versions[0].version} → Production")
+                promoted_count += 1
+            else:
+                print(f"  ⚠️ No model version found for {display_name} run_id={run_id}")
+                failed_models.append(display_name)
+
+        except Exception as e:
+            print(f"  ❌ {display_name} promotion error: {e}")
+            failed_models.append(display_name)
+
+    # Summary
+    print(f"\n📊 Promotion Summary:")
+    print(f"  ✅ Successfully promoted: {promoted_count}/3 models")
+    if failed_models:
+        print(f"  ❌ Failed models: {', '.join(failed_models)}")
 
     print("✅ Model promotion complete")
 

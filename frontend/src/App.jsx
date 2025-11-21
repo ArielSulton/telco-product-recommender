@@ -1,6 +1,6 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './context/AuthContext'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import { RecommendationProvider } from './context/RecommendationContext'
 import { ToastProvider } from './context/ToastContext'
 
@@ -19,11 +19,21 @@ import NotFoundPage from './pages/NotFoundPage'
 
 // Components
 import ErrorBoundary from './components/ErrorBoundary'
+import LoadingSpinner from './components/LoadingSpinner'
 
-// Protected Route Component
+// ✅ Protected Route Component using AuthContext
 const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('token')
-  return token ? children : <Navigate to="/login" replace />
+  const { isAuthenticated, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    )
+  }
+
+  return isAuthenticated ? children : <Navigate to="/login" replace />
 }
 
 function App() {

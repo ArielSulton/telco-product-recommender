@@ -183,6 +183,8 @@ services:
       - ./infrastructure/airflow/dags:/opt/airflow/dags
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins
       - ./backend:/opt/airflow/backend
+      - ./services:/opt/airflow/services
+      - ./ml/data:/opt/airflow/ml/data
       - airflow_logs:/opt/airflow/logs
     depends_on:
       postgres:
@@ -218,6 +220,8 @@ services:
       - ./infrastructure/airflow/dags:/opt/airflow/dags
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins
       - ./backend:/opt/airflow/backend
+      - ./services:/opt/airflow/services
+      - ./ml/data:/opt/airflow/ml/data
       - airflow_logs:/opt/airflow/logs
     depends_on:
       - airflow-init
@@ -240,6 +244,8 @@ services:
       - ./infrastructure/airflow/dags:/opt/airflow/dags
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins
       - ./backend:/opt/airflow/backend
+      - ./services:/opt/airflow/services
+      - ./ml/data:/opt/airflow/ml/data
       - airflow_logs:/opt/airflow/logs
     depends_on:
       - airflow-init

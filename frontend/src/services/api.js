@@ -11,13 +11,22 @@ const api = axios.create({
   },
 })
 
-// Request interceptor - add auth token
+// Request interceptor - add auth token and CSRF protection
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+
+    // ✅ CSRF Protection for state-changing operations
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method?.toUpperCase())) {
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+      if (csrfToken) {
+        config.headers['X-CSRF-Token'] = csrfToken
+      }
+    }
+
     return config
   },
   (error) => {

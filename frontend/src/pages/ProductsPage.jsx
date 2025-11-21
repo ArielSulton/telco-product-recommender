@@ -32,11 +32,13 @@ const ProductsPage = () => {
   const loadProducts = async () => {
     try {
       setLoading(true)
-      // Use mock data for development
-      const data = recommendationService.mockProducts()
+      // Use real API
+      const data = await recommendationService.getProducts()
       setProducts(data.products || [])
     } catch (error) {
       console.error('Failed to load products:', error)
+      // Fallback to empty array on error
+      setProducts([])
     } finally {
       setLoading(false)
     }

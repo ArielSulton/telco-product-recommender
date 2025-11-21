@@ -41,6 +41,11 @@ export default defineConfig({
       },
     },
     chunkSizeWarningLimit: 1000,
+    // ✅ Remove console.* and debugger in production builds
+    minify: 'esbuild',
+    esbuild: {
+      drop: ['console', 'debugger'],
+    },
   },
 
   optimizeDeps: {

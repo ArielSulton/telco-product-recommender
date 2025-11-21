@@ -5,14 +5,14 @@ import SkeletonCard from './SkeletonCard'
 import EmptyState from './EmptyState'
 import useRecommendations from '../hooks/useRecommendations'
 
-const RecommendationWidget = ({ title = 'Recommended for You', limit = 3, useMock = false }) => {
+const RecommendationWidget = ({ title = 'Recommended for You', limit = 3 }) => {
   const navigate = useNavigate()
   const { recommendations, loading, error, variant, fetchRecommendations } =
     useRecommendations()
 
   useEffect(() => {
-    fetchRecommendations({}, limit, useMock)
-  }, [fetchRecommendations, limit, useMock])
+    fetchRecommendations({}, limit)
+  }, [fetchRecommendations, limit])
 
   if (loading) {
     return (
@@ -73,7 +73,7 @@ const RecommendationWidget = ({ title = 'Recommended for You', limit = 3, useMoc
       {recommendations.length > limit && (
         <div className="text-center mt-8">
           <button
-            onClick={() => fetchRecommendations({}, limit + 3, useMock)}
+            onClick={() => fetchRecommendations({}, limit + 3)}
             className="btn-secondary"
           >
             Load More Recommendations

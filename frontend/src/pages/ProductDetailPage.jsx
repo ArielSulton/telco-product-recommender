@@ -20,17 +20,12 @@ const ProductDetailPage = () => {
   const loadProduct = useCallback(async () => {
     try {
       setLoading(true)
-      // Use mock data for development
-      const mockData = recommendationService.mockProducts()
-      const foundProduct = mockData.products.find((p) => p.product_id === id)
-
-      if (foundProduct) {
-        setProduct(foundProduct)
-      } else {
-        console.error('Product not found')
-      }
+      // Use real API
+      const productData = await recommendationService.getProduct(id)
+      setProduct(productData)
     } catch (error) {
       console.error('Failed to load product:', error)
+      setProduct(null)
     } finally {
       setLoading(false)
     }
