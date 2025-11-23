@@ -5,14 +5,12 @@ const Footer = () => {
   const currentYear = new Date().getFullYear()
 
   return (
-    <footer className="bg-gradient-to-r from-cyan-100 to-cyan-200 mt-auto">
+    <footer className="bg-white mt-auto">
       <div className="container mx-auto px-4 py-8">
         <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
           {/* Logo and Branding */}
           <div className="flex items-center space-x-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-green-600 to-cyan-400 rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-xl">P</span>
-            </div>
+            <img src="/icon.png" alt="Paketify Logo" className="h-14" />
             <span className="text-xl font-bold text-gray-900">PAKETIFY</span>
           </div>
 
@@ -61,7 +59,7 @@ const Footer = () => {
         </div>
 
         {/* Quick Links (optional) */}
-        <div className="mt-6 pt-6 border-t border-cyan-300">
+        <div className="mt-6 pt-6 border-t border-gray-200">
           <div className="flex flex-wrap justify-center gap-6 text-sm">
             <Link to="/about" className="text-gray-700 hover:text-green-700">
               About Us

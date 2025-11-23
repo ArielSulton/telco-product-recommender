@@ -5,7 +5,7 @@ import SkeletonCard from './SkeletonCard'
 import EmptyState from './EmptyState'
 import useRecommendations from '../hooks/useRecommendations'
 
-const RecommendationWidget = ({ title = 'Recommended for You', limit = 3 }) => {
+const RecommendationWidget = ({ title = 'Recommended for You', limit = 3, onBuyClick }) => {
   const navigate = useNavigate()
   const { recommendations, loading, error, variant, fetchRecommendations } =
     useRecommendations()
@@ -66,6 +66,7 @@ const RecommendationWidget = ({ title = 'Recommended for You', limit = 3 }) => {
             product={product}
             variant={variant}
             showReason={true}
+            onBuyClick={onBuyClick}
           />
         ))}
       </div>

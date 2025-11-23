@@ -90,15 +90,8 @@ const RegisterPage = () => {
   return (
     <div className="min-h-screen bg-cyan-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Logo */}
+        {/* Welcome */}
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center space-x-2 mb-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-green-600 to-cyan-400 rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-3xl">P</span>
-            </div>
-            <span className="text-2xl font-bold text-gray-900">PAKETIFY</span>
-          </Link>
-
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             CREATE YOUR <span className="text-green-700">ACCOUNT</span>
           </h1>

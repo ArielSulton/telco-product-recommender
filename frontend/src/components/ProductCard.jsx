@@ -1,17 +1,11 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { useToast } from '../context/ToastContext'
 import useEventTracking from '../hooks/useEventTracking'
-import CheckoutModal from './CheckoutModal'
 import { Database, Calendar, DollarSign, Star, ArrowRight, Lightbulb, ShoppingCart } from 'lucide-react'
 
-const ProductCard = ({ product, variant, showReason = false, onPurchaseSuccess }) => {
+const ProductCard = ({ product, variant, showReason = false, onBuyClick }) => {
   const navigate = useNavigate()
-  const { user, refreshUser } = useAuth()
-  const toast = useToast()
   const { trackView, trackClick } = useEventTracking()
-  const [showCheckout, setShowCheckout] = useState(false)
 
   // Track view on mount
   useEffect(() => {
@@ -33,27 +27,8 @@ const ProductCard = ({ product, variant, showReason = false, onPurchaseSuccess }
       source: 'product_card',
       action: 'buy_click',
     })
-    setShowCheckout(true)
-  }
-
-  const handleCheckoutSuccess = async (purchaseData) => {
-    // Track purchase event
-    trackClick(product.product_id, variant, {
-      source: 'product_card',
-      action: 'purchase_completed',
-      purchase_id: purchaseData.purchase_id
-    })
-
-    // Refresh user data to update balance
-    if (refreshUser) {
-      await refreshUser()
-    }
-
-    // Callback to parent component
-    onPurchaseSuccess?.(purchaseData)
-
-    // Show success message
-    toast.success(purchaseData.message || 'Pembelian berhasil! Paket sudah aktif.')
+    // Call parent handler to open modal (single instance at page level)
+    onBuyClick?.(product)
   }
 
   const formatPrice = (price) => {
@@ -153,15 +128,6 @@ const ProductCard = ({ product, variant, showReason = false, onPurchaseSuccess }
           <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
         </button>
       </div>
-
-      {/* Checkout Modal */}
-      <CheckoutModal
-        isOpen={showCheckout}
-        onClose={() => setShowCheckout(false)}
-        product={product}
-        userBalance={user?.balance || 0}
-        onSuccess={handleCheckoutSuccess}
-      />
 
       {/* A/B Test Variant Indicator (development only) */}
       {variant && process.env.NODE_ENV === 'development' && (

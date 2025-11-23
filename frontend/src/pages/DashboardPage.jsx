@@ -1,18 +1,66 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import RecommendationWidget from '../components/RecommendationWidget'
 import ProductCard from '../components/ProductCard'
+import CheckoutModal from '../components/CheckoutModal'
 import QuestionnaireModal from '../components/QuestionnaireModal'
-import { Smartphone, Wallet, Wifi, Video, MessageCircle, Phone } from 'lucide-react'
+import { Smartphone, Wallet, Wifi, Video, MessageCircle, Phone, Package, Calendar, Database } from 'lucide-react'
 import api from '../services/api'
 
 const DashboardPage = () => {
-  const { user } = useAuth()
+  const { user, refreshUser } = useAuth()
+  const toast = useToast()
   const [showQuestionnaire, setShowQuestionnaire] = useState(false)
   const [hasCheckedOnboarding, setHasCheckedOnboarding] = useState(false)
   const [segment, setSegment] = useState(null)
+
+  // Single checkout modal state
+  const [checkoutProduct, setCheckoutProduct] = useState(null)
+  const [showCheckout, setShowCheckout] = useState(false)
+
+  // Recent transactions state
+  const [recentTransactions, setRecentTransactions] = useState([])
+  const [loadingTransactions, setLoadingTransactions] = useState(true)
+
+  // Active packages state (last 3 purchased packages as "active")
+  const [activePackages, setActivePackages] = useState([])
+  const [loadingPackages, setLoadingPackages] = useState(true)
+
+  // Key to force RecommendationWidget refresh
+  const [recommendationKey, setRecommendationKey] = useState(0)
+
+  // Fetch recent transactions
+  const fetchRecentTransactions = async () => {
+    try {
+      setLoadingTransactions(true)
+      const response = await api.get('/api/v1/purchases/history?limit=3')
+      setRecentTransactions(response.data.purchases || [])
+    } catch (error) {
+      console.error('Failed to fetch recent transactions:', error)
+      setRecentTransactions([])
+    } finally {
+      setLoadingTransactions(false)
+    }
+  }
+
+  // Fetch active packages (recent purchases that are still "active")
+  const fetchActivePackages = async () => {
+    try {
+      setLoadingPackages(true)
+      const response = await api.get('/api/v1/purchases/history?limit=5')
+      // Filter to show only recent packages (within validity period)
+      const packages = response.data.purchases || []
+      setActivePackages(packages.slice(0, 3)) // Show max 3 active packages
+    } catch (error) {
+      console.error('Failed to fetch active packages:', error)
+      setActivePackages([])
+    } finally {
+      setLoadingPackages(false)
+    }
+  }
 
   // Check onboarding status and fetch segment on mount
   useEffect(() => {
@@ -44,6 +92,8 @@ const DashboardPage = () => {
 
     if (user) {
       checkOnboardingStatus()
+      fetchRecentTransactions()
+      fetchActivePackages()
     }
   }, [user, hasCheckedOnboarding])
 
@@ -52,28 +102,44 @@ const DashboardPage = () => {
     // Optionally refresh recommendations here
   }
 
-  // Mock user data and recent transactions
-  const userData = {
-    phone: user?.phone || '0812 3456 7890',
-    balance: user?.balance || 100000,
-    dataUsage: {
-      internet: 6.7,
-      streaming: 1.0,
-      sosmed: 872,
-      voice: 27,
-    },
+  // Handlers for checkout modal
+  const handleOpenCheckout = (product) => {
+    setCheckoutProduct(product)
+    setShowCheckout(true)
   }
 
-  const recentTransactions = [
-    {
-      product_id: 'PKT001',
-      product_name: 'Paket For You',
-      quota_data_mb: 10240,
-      validity_days: 7,
-      price: 15000,
-      purchase_date: '2024-11-01',
-    },
-  ]
+  const handleCloseCheckout = () => {
+    setShowCheckout(false)
+    setCheckoutProduct(null)
+  }
+
+  const handleCheckoutSuccess = async (purchaseData) => {
+    if (refreshUser) {
+      await refreshUser()
+    }
+    // Refresh recent transactions and active packages
+    await fetchRecentTransactions()
+    await fetchActivePackages()
+    // Trigger RecommendationWidget refresh by changing key
+    setRecommendationKey(prev => prev + 1)
+    toast.success(purchaseData.message || 'Pembelian berhasil! Paket sudah aktif.')
+    handleCloseCheckout()
+  }
+
+  // Format phone number for display
+  const formatPhone = (phone) => {
+    if (!phone) return '-'
+    // Format: 0812 3456 7890
+    return phone.replace(/(\d{4})(\d{4})(\d+)/, '$1 $2 $3')
+  }
+
+  // Data usage is mock for demo (requires real telco tracking system)
+  const mockDataUsage = {
+    internet: 6.7,
+    streaming: 1.0,
+    sosmed: 872,
+    voice: 27,
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-cyan-50">
@@ -89,7 +155,7 @@ const DashboardPage = () => {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-700 mb-1">Nomor</h2>
-                <p className="text-2xl font-bold text-gray-900">{userData.phone}</p>
+                <p className="text-2xl font-bold text-gray-900">{formatPhone(user?.phone)}</p>
               </div>
             </div>
             <div className="w-px h-16 bg-cyan-400 hidden md:block"></div>
@@ -100,7 +166,7 @@ const DashboardPage = () => {
               <div>
                 <h2 className="text-lg font-semibold text-gray-700 mb-1">Pulsa</h2>
                 <p className="text-2xl font-bold text-gray-900">
-                  Rp {userData.balance.toLocaleString('id-ID')}
+                  Rp {(user?.balance || 0).toLocaleString('id-ID')}
                 </p>
               </div>
             </div>
@@ -125,10 +191,11 @@ const DashboardPage = () => {
           </div>
         )}
 
-        {/* Data Usage Card */}
+        {/* Data Usage Card (Mock Data - requires real telco tracking) */}
         <div className="card mb-8 hover-lift animate-slide-up">
           <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
             Data Usage
+            <span className="block text-xs font-normal text-gray-500 mt-1">(Demo)</span>
           </h2>
 
           <div className="space-y-6">
@@ -142,13 +209,13 @@ const DashboardPage = () => {
                   </span>
                 </div>
                 <span className="text-xl font-bold text-green-700">
-                  {userData.dataUsage.internet} GB
+                  {mockDataUsage.internet} GB
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div
                   className="progress-bar h-3"
-                  style={{ width: `${(userData.dataUsage.internet / 10) * 100}%` }}
+                  style={{ width: `${(mockDataUsage.internet / 10) * 100}%` }}
                 ></div>
               </div>
             </div>
@@ -163,13 +230,13 @@ const DashboardPage = () => {
                   </span>
                 </div>
                 <span className="text-xl font-bold text-green-700">
-                  {userData.dataUsage.streaming} GB
+                  {mockDataUsage.streaming} GB
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div
                   className="progress-bar h-3"
-                  style={{ width: `${(userData.dataUsage.streaming / 5) * 100}%` }}
+                  style={{ width: `${(mockDataUsage.streaming / 5) * 100}%` }}
                 ></div>
               </div>
             </div>
@@ -184,13 +251,13 @@ const DashboardPage = () => {
                   </span>
                 </div>
                 <span className="text-xl font-bold text-green-700">
-                  {userData.dataUsage.sosmed} MB
+                  {mockDataUsage.sosmed} MB
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div
                   className="progress-bar h-3"
-                  style={{ width: `${(userData.dataUsage.sosmed / 1000) * 100}%` }}
+                  style={{ width: `${(mockDataUsage.sosmed / 1000) * 100}%` }}
                 ></div>
               </div>
             </div>
@@ -205,41 +272,130 @@ const DashboardPage = () => {
                   </span>
                 </div>
                 <span className="text-xl font-bold text-green-700">
-                  {userData.dataUsage.voice} Menit
+                  {mockDataUsage.voice} Menit
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div
                   className="progress-bar h-3"
-                  style={{ width: `${(userData.dataUsage.voice / 60) * 100}%` }}
+                  style={{ width: `${(mockDataUsage.voice / 60) * 100}%` }}
                 ></div>
               </div>
             </div>
           </div>
         </div>
 
+        {/* Active Packages */}
+        <div className="card mb-8 hover-lift animate-slide-up">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+            <Package className="w-7 h-7 inline-block mr-2 text-cyan-600" />
+            Paket Aktif
+          </h2>
+
+          {loadingPackages ? (
+            <div className="space-y-4">
+              {Array.from({ length: 2 }).map((_, index) => (
+                <div key={index} className="animate-pulse flex items-center gap-4 p-4 bg-gray-100 rounded-lg">
+                  <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : activePackages.length > 0 ? (
+            <div className="space-y-4">
+              {activePackages.map((pkg, index) => (
+                <div
+                  key={pkg.purchase_id || index}
+                  className="flex items-center gap-4 p-4 bg-gradient-to-r from-green-50 to-cyan-50 rounded-lg border-2 border-green-200"
+                >
+                  <div className="p-3 bg-green-600 rounded-full">
+                    <Package className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-gray-900">{pkg.product_name}</h3>
+                    <div className="flex flex-wrap gap-4 text-sm text-gray-600 mt-1">
+                      {pkg.quota_data_mb && (
+                        <span className="flex items-center gap-1">
+                          <Database className="w-4 h-4 text-cyan-600" />
+                          {pkg.quota_data_mb >= 1024
+                            ? `${(pkg.quota_data_mb / 1024).toFixed(1)} GB`
+                            : `${pkg.quota_data_mb} MB`}
+                        </span>
+                      )}
+                      {pkg.validity_days && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-4 h-4 text-purple-600" />
+                          {pkg.validity_days} Hari
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
+                      Aktif
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">Belum ada paket aktif</p>
+              <p className="text-sm text-gray-400 mt-1">Beli paket untuk mulai menggunakan layanan</p>
+            </div>
+          )}
+        </div>
+
         {/* Personalized Recommendations */}
         <RecommendationWidget
+          key={recommendationKey}
           title="Recommended"
           limit={3}
+          onBuyClick={handleOpenCheckout}
         />
 
         {/* Recent Transactions */}
-        {recentTransactions.length > 0 && (
-          <section className="mt-12">
-            <h2 className="section-title">Recent Transaction</h2>
+        <section className="mt-12">
+          <h2 className="section-title">Recent Transaction</h2>
 
+          {loadingTransactions ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="card animate-pulse">
+                  <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/3 mb-4"></div>
+                  <div className="h-10 bg-gray-200 rounded w-full"></div>
+                </div>
+              ))}
+            </div>
+          ) : recentTransactions.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {recentTransactions.map((transaction, index) => (
                 <ProductCard
-                  key={`${transaction.product_id}-${index}`}
-                  product={transaction}
+                  key={transaction.purchase_id || `${transaction.product_id}-${index}`}
+                  product={{
+                    product_id: transaction.product_id,
+                    product_name: transaction.product_name,
+                    quota_data_mb: transaction.quota_data_mb,
+                    validity_days: transaction.validity_days,
+                    price: transaction.price,
+                  }}
                   showReason={false}
+                  onBuyClick={handleOpenCheckout}
                 />
               ))}
             </div>
-          </section>
-        )}
+          ) : (
+            <div className="card text-center py-8">
+              <p className="text-gray-500">Belum ada transaksi. Mulai berlangganan paket sekarang!</p>
+            </div>
+          )}
+        </section>
       </main>
 
       <Footer />
@@ -249,6 +405,15 @@ const DashboardPage = () => {
         isOpen={showQuestionnaire}
         onClose={() => setShowQuestionnaire(false)}
         onComplete={handleQuestionnaireComplete}
+      />
+
+      {/* Single Checkout Modal - prevents flickering from multiple instances */}
+      <CheckoutModal
+        isOpen={showCheckout}
+        onClose={handleCloseCheckout}
+        product={checkoutProduct}
+        userBalance={user?.balance || 0}
+        onSuccess={handleCheckoutSuccess}
       />
     </div>
   )

@@ -21,17 +21,9 @@ const AdminDashboardPage = () => {
     active_products: 0
   })
 
-  // Mock recommendations data (unchanged for now)
-  const [recommendations] = useState([
-    { id: 'C001', username: 'John Doe', device: 'Realme', usage: '12.3 GB', offer: 'Data Booster' },
-    { id: 'C002', username: 'John', device: 'Vivo', usage: '8 GB', offer: 'General Offer' },
-    { id: 'C003', username: 'Doe', device: 'Samsung', usage: '9.7 GB', offer: 'Top-up Promo' },
-    { id: 'C004', username: 'John', device: 'Oppo', usage: '10 GB', offer: 'Data Booster' },
-    { id: 'C005', username: 'Doe', device: 'Apple', usage: '8.5 GB', offer: 'General Offer' },
-    { id: 'C006', username: 'John', device: 'Apple', usage: '20.4 GB', offer: 'Top-up Promo' },
-    { id: 'C007', username: 'Doe', device: 'Apple', usage: '5 GB', offer: 'Top-up Promo' },
-    { id: 'C008', username: 'John', device: 'Apple', usage: '19.2 GB', offer: 'Data Booster' },
-  ])
+  // User recommendations data from API
+  const [recommendations, setRecommendations] = useState([])
+  const [loadingRecommendations, setLoadingRecommendations] = useState(true)
 
   // Products data from API
   const [packages, setPackages] = useState([])
@@ -45,6 +37,20 @@ const AdminDashboardPage = () => {
     quota: '',
     benefit: '',
   })
+
+  // Fetch user recommendations
+  const fetchUserRecommendations = useCallback(async () => {
+    setLoadingRecommendations(true)
+    try {
+      const response = await api.get('/api/v1/admin/user-recommendations?limit=10')
+      setRecommendations(response.data || [])
+    } catch (error) {
+      console.error('Failed to fetch user recommendations:', error)
+      setRecommendations([])
+    } finally {
+      setLoadingRecommendations(false)
+    }
+  }, [])
 
   // Fetch products and stats from API
   const fetchProductsAndStats = useCallback(async () => {
@@ -71,13 +77,16 @@ const AdminDashboardPage = () => {
       const statsResponse = await api.get('/api/v1/admin/stats')
       setStats(statsResponse.data)
 
+      // Fetch user recommendations
+      await fetchUserRecommendations()
+
     } catch (error) {
       console.error('Failed to fetch admin data:', error)
       toast.error('Gagal memuat data admin')
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, fetchUserRecommendations])
 
   // Fetch products and stats on mount
   useEffect(() => {
@@ -300,15 +309,21 @@ const AdminDashboardPage = () => {
           </>
         )}
 
-        {/* Offer Recommendation Table */}
+        {/* User Recommendations Table */}
         <section className="mb-8">
           <div className="card">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Offer Recommendation</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">User Recommendations</h2>
 
-            {recommendations.length === 0 ? (
+            {loadingRecommendations ? (
+              <div className="animate-pulse space-y-3">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <div key={index} className="h-12 bg-gray-200 rounded"></div>
+                ))}
+              </div>
+            ) : recommendations.length === 0 ? (
               <EmptyState
                 type="analytics"
-                title="Belum Ada Rekomendasi"
+                title="Belum Ada Pengguna"
                 description="Sistem rekomendasi akan menampilkan penawaran personal untuk pengguna berdasarkan aktivitas dan preferensi mereka."
               />
             ) : (
@@ -316,21 +331,29 @@ const AdminDashboardPage = () => {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b-2 border-gray-200">
-                      <th className="px-4 py-3 text-left font-bold text-gray-900">ID</th>
                       <th className="px-4 py-3 text-left font-bold text-gray-900">Username</th>
-                      <th className="px-4 py-3 text-left font-bold text-gray-900">Device</th>
-                      <th className="px-4 py-3 text-left font-bold text-gray-900">Usage</th>
-                      <th className="px-4 py-3 text-left font-bold text-gray-900">Offer</th>
+                      <th className="px-4 py-3 text-left font-bold text-gray-900">Phone</th>
+                      <th className="px-4 py-3 text-left font-bold text-gray-900">Segment</th>
+                      <th className="px-4 py-3 text-center font-bold text-gray-900">Purchases</th>
+                      <th className="px-4 py-3 text-left font-bold text-gray-900">Recommended</th>
                     </tr>
                   </thead>
                   <tbody>
                     {recommendations.map((rec, index) => (
-                      <tr key={rec.id} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                        <td className="px-4 py-3 text-gray-900">{rec.id}</td>
-                        <td className="px-4 py-3 text-gray-900">{rec.username}</td>
-                        <td className="px-4 py-3 text-gray-900">{rec.device}</td>
-                        <td className="px-4 py-3 text-gray-900">{rec.usage}</td>
-                        <td className="px-4 py-3 text-gray-900">{rec.offer}</td>
+                      <tr key={rec.user_id} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                        <td className="px-4 py-3 text-gray-900 font-medium">{rec.username}</td>
+                        <td className="px-4 py-3 text-gray-600 font-mono text-sm">{rec.phone}</td>
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-1 bg-cyan-100 text-cyan-800 rounded-full text-xs font-semibold">
+                            {rec.segment_name}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center text-gray-900">{rec.total_purchases}</td>
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-sm font-medium">
+                            {rec.recommended_product}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import authService from '../services/authService'
+import { useAuth } from '../context/AuthContext'
 
 const LoginPage = () => {
   const navigate = useNavigate()
+  const { login } = useAuth()
 
   const [formData, setFormData] = useState({
     phone: '',
@@ -26,8 +27,8 @@ const LoginPage = () => {
     setError('')
 
     try {
-      // Call real login API
-      await authService.login(formData.phone, formData.password)
+      // Call login from AuthContext (updates user state)
+      await login(formData.phone, formData.password)
 
       // Redirect to dashboard
       navigate('/dashboard')
@@ -42,15 +43,8 @@ const LoginPage = () => {
   return (
     <div className="min-h-screen bg-cyan-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Logo */}
+        {/* Welcome */}
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center space-x-2 mb-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-green-600 to-cyan-400 rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-3xl">P</span>
-            </div>
-            <span className="text-2xl font-bold text-gray-900">PAKETIFY</span>
-          </Link>
-
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             WELCOME TO <span className="text-green-700">PAKETIFY</span>
           </h1>

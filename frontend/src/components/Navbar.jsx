@@ -18,9 +18,7 @@ const Navbar = () => {
         <div className="flex justify-between items-center">
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-green-600 to-cyan-400 rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-xl">P</span>
-            </div>
+            <img src="/icon.png" alt="Paketify Logo" className="h-14" />
             <span className="text-xl font-bold text-gray-900">PAKETIFY</span>
           </Link>
 

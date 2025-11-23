@@ -175,7 +175,7 @@ const AboutPage = () => {
         </section>
 
         {/* Tech Stack */}
-        <section className="bg-gradient-to-r from-cyan-100 to-cyan-200 py-16">
+        <section className="bg-white py-16">
           <div className="container mx-auto px-4">
             <h2 className="section-title text-center">Technology Stack</h2>
 
@@ -227,13 +227,13 @@ const AboutPage = () => {
         </section>
 
         {/* CTA Section */}
-        <section className="bg-green-700 text-white py-16">
+        <section className="bg-gradient-to-r from-green-600 to-cyan-400 text-white py-16">
           <div className="container mx-auto px-4 text-center">
             <h2 className="text-3xl font-bold mb-4">Ready to Get Started?</h2>
             <p className="text-xl mb-8">
               Discover the perfect telco package for your needs today
             </p>
-            <a href="/products" className="btn-secondary inline-block">
+            <a href="/products" className="btn-primary inline-block">
               Explore Products
             </a>
           </div>

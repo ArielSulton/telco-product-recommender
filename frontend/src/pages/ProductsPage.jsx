@@ -3,13 +3,22 @@ import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import ProductCard from '../components/ProductCard'
 import LoadingSpinner from '../components/LoadingSpinner'
+import CheckoutModal from '../components/CheckoutModal'
+import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 import recommendationService from '../services/recommendationService'
 
 const ProductsPage = () => {
+  const { user, refreshUser } = useAuth()
+  const toast = useToast()
   const [products, setProducts] = useState([])
   const [filteredProducts, setFilteredProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedFamily, setSelectedFamily] = useState('all')
+
+  // Single checkout modal state (lifted from ProductCard)
+  const [checkoutProduct, setCheckoutProduct] = useState(null)
+  const [showCheckout, setShowCheckout] = useState(false)
 
   const filterProducts = useCallback(() => {
     if (selectedFamily === 'all') {
@@ -45,6 +54,30 @@ const ProductsPage = () => {
   }
 
   const productFamilies = ['all', ...new Set(products.map((p) => p.product_family))]
+
+  // Handlers for checkout modal
+  const handleOpenCheckout = (product) => {
+    setCheckoutProduct(product)
+    setShowCheckout(true)
+  }
+
+  const handleCloseCheckout = () => {
+    setShowCheckout(false)
+    setCheckoutProduct(null)
+  }
+
+  const handleCheckoutSuccess = async (purchaseData) => {
+    // Refresh user data to update balance
+    if (refreshUser) {
+      await refreshUser()
+    }
+    // Show success message
+    toast.success(purchaseData.message || 'Pembelian berhasil! Paket sudah aktif.')
+    // Close the modal
+    handleCloseCheckout()
+    // Reload products to reflect any changes
+    loadProducts()
+  }
 
   if (loading) {
     return (
@@ -108,6 +141,7 @@ const ProductsPage = () => {
                       key={product.product_id}
                       product={product}
                       showReason={false}
+                      onBuyClick={handleOpenCheckout}
                     />
                   ))}
                 </div>
@@ -125,6 +159,15 @@ const ProductsPage = () => {
       </main>
 
       <Footer />
+
+      {/* Single Checkout Modal - prevents flickering from multiple instances */}
+      <CheckoutModal
+        isOpen={showCheckout}
+        onClose={handleCloseCheckout}
+        product={checkoutProduct}
+        userBalance={user?.balance || 0}
+        onSuccess={handleCheckoutSuccess}
+      />
     </div>
   )
 }

@@ -113,7 +113,7 @@ const HomePage = () => {
           </div>
 
           <div className="text-center mt-8">
-            <Link to="/products" className="btn-secondary inline-flex items-center gap-2 active-press">
+            <Link to="/products" className="btn-primary inline-flex items-center gap-2 active-press">
               View All Products
               <ArrowRight className="w-5 h-5" />
             </Link>
@@ -121,12 +121,12 @@ const HomePage = () => {
         </section>
 
         {/* CTA Section */}
-        <section className="bg-gradient-to-r from-cyan-100 via-cyan-200 to-green-100 py-20 mt-12">
+        <section className="bg-gradient-to-r from-green-600 to-cyan-400 py-20 mt-12">
           <div className="container mx-auto px-4 text-center">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4 animate-slide-up">
+            <h2 className="text-4xl font-bold text-white mb-4 animate-slide-up">
               Ready to Find Your Perfect Package?
             </h2>
-            <p className="text-xl text-gray-700 mb-8 max-w-2xl mx-auto animate-slide-up" style={{ animationDelay: '0.1s' }}>
+            <p className="text-xl text-white mb-8 max-w-2xl mx-auto animate-slide-up" style={{ animationDelay: '0.1s' }}>
               Sign in to get personalized recommendations based on your usage patterns
             </p>
             <Link to="/login" className="btn-primary inline-flex items-center gap-2 text-lg px-8 py-4 active-press animate-scale-in" style={{ animationDelay: '0.2s' }}>
