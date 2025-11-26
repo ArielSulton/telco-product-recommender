@@ -363,7 +363,8 @@ services:
 
   # Apache Airflow Init
   airflow-init:
-    image: apache/airflow:2.8.0-python3.10
+    build:
+      context: ./infrastructure/airflow
     container_name: telco-airflow-init-prod
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
@@ -372,7 +373,6 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY}
       - MLFLOW_TRACKING_URI=http://mlflow:5000
-      - _PIP_ADDITIONAL_REQUIREMENTS=mlflow==2.9.2 scikit-learn lightfm xgboost joblib
     volumes:
       - ./infrastructure/airflow/dags:/opt/airflow/dags:ro
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins:ro
@@ -398,7 +398,8 @@ services:
 
   # Airflow Webserver
   airflow-webserver:
-    image: apache/airflow:2.8.0-python3.10
+    build:
+      context: ./infrastructure/airflow
     container_name: telco-airflow-webserver-prod
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
@@ -406,7 +407,6 @@ services:
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY}
       - MLFLOW_TRACKING_URI=http://mlflow:5000
-      - _PIP_ADDITIONAL_REQUIREMENTS=mlflow==2.9.2 scikit-learn lightfm xgboost joblib
     expose:
       - "8080"
     volumes:
@@ -444,14 +444,17 @@ services:
 
   # Airflow Scheduler
   airflow-scheduler:
-    image: apache/airflow:2.8.0-python3.10
+    build:
+      context: ./infrastructure/airflow
     container_name: telco-airflow-scheduler-prod
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/airflow
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
       - MLFLOW_TRACKING_URI=http://mlflow:5000
-      - _PIP_ADDITIONAL_REQUIREMENTS=mlflow==2.9.2 scikit-learn lightfm xgboost joblib
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     volumes:
       - ./infrastructure/airflow/dags:/opt/airflow/dags:ro
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins:ro

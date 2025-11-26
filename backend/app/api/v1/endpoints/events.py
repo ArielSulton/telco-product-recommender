@@ -72,7 +72,7 @@ def initialize_event_service(
             """Wrapper to manage database session for background flush."""
             async with AsyncSessionLocal() as session:
                 try:
-                    await _event_service.start_background_flush(session)
+                    _event_service.start_background_flush(session)
                 except Exception as e:
                     logger.error(f"Event background flush error: {str(e)}", exc_info=True)
 
@@ -530,15 +530,15 @@ async def flush_events(
 # UTILITY FUNCTIONS
 # ==============================================
 
-async def initialize_event_service(
+async def initialize_event_service_with_db(
     db: AsyncSession,
     batch_size: int = 100,
     flush_interval: int = 5
 ) -> None:
     """
-    Initialize global event service instance.
+    Initialize global event service instance with provided database session.
 
-    Should be called during application startup.
+    Alternative initialization method when db session is already available.
 
     Args:
         db: Database session for background flushing

@@ -59,6 +59,8 @@ class FeaturesUpdatedWebhook(BaseModel):
 class ModelDeployedWebhook(BaseModel):
     """Webhook payload for model deployment notification."""
 
+    model_config = {"protected_namespaces": ()}
+
     model_name: str = Field(..., description="Model name")
     version: str = Field(..., description="Model version")
     registry_uri: str = Field(..., description="MLflow registry URI")

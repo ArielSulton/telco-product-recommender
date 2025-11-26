@@ -169,7 +169,8 @@ services:
 
   # Apache Airflow (ETL Orchestration)
   airflow-init:
-    image: apache/airflow:2.8.0-python3.10
+    build:
+      context: ./infrastructure/airflow
     container_name: telco-airflow-init-dev
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
@@ -178,7 +179,6 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY:-}
       - MLFLOW_TRACKING_URI=http://mlflow:5000
-      - _PIP_ADDITIONAL_REQUIREMENTS=mlflow==2.9.2 scikit-learn lightfm xgboost joblib
     volumes:
       - ./infrastructure/airflow/dags:/opt/airflow/dags
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins
@@ -205,7 +205,8 @@ services:
           --email $${AIRFLOW_ADMIN_EMAIL:-admin@example.com}
 
   airflow-webserver:
-    image: apache/airflow:2.8.0-python3.10
+    build:
+      context: ./infrastructure/airflow
     container_name: telco-airflow-webserver-dev
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
@@ -213,7 +214,6 @@ services:
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY:-}
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY:-}
       - MLFLOW_TRACKING_URI=http://mlflow:5000
-      - _PIP_ADDITIONAL_REQUIREMENTS=mlflow==2.9.2 scikit-learn lightfm xgboost joblib
     ports:
       - "8080:8080"
     volumes:
@@ -230,7 +230,8 @@ services:
     command: webserver
 
   airflow-scheduler:
-    image: apache/airflow:2.8.0-python3.10
+    build:
+      context: ./infrastructure/airflow
     container_name: telco-airflow-scheduler-dev
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
@@ -239,7 +240,6 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - MLFLOW_TRACKING_URI=http://mlflow:5000
-      - _PIP_ADDITIONAL_REQUIREMENTS=mlflow==2.9.2 scikit-learn lightfm xgboost joblib
     volumes:
       - ./infrastructure/airflow/dags:/opt/airflow/dags
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins

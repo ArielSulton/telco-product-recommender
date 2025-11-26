@@ -236,7 +236,7 @@ async def get_current_user_id(
     # ✅ Query database to verify user exists
     try:
         result = await db.execute(
-            "SELECT id FROM users WHERE id = :user_id",
+            "SELECT id FROM app_users WHERE id = :user_id",
             {"user_id": str(user_id)}
         )
         user = result.fetchone()

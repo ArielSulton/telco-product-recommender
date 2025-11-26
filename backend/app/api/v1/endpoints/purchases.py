@@ -9,7 +9,7 @@ from psycopg2.extras import RealDictCursor
 from datetime import datetime
 import uuid
 
-from app.core.security import get_current_user
+from app.api.v1.endpoints.auth import get_current_user
 from app.db.models.user import User
 from app.db.database import get_db_connection
 
@@ -79,7 +79,7 @@ async def create_purchase(
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS purchases (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
                 product_id VARCHAR(50) NOT NULL,
                 product_name VARCHAR(255) NOT NULL,
                 quota_data_mb INTEGER,
@@ -124,7 +124,7 @@ async def create_purchase(
 
             # Deduct balance
             cursor.execute("""
-                UPDATE users
+                UPDATE app_users
                 SET balance = balance - %s, updated_at = NOW()
                 WHERE id = %s
                 RETURNING balance
@@ -203,7 +203,7 @@ async def get_purchase_history(
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS purchases (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
                 product_id VARCHAR(50) NOT NULL,
                 product_name VARCHAR(255) NOT NULL,
                 quota_data_mb INTEGER,

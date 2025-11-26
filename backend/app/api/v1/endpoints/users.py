@@ -8,7 +8,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
 
-from app.core.security import get_current_user
+from app.api.v1.endpoints.auth import get_current_user
 from app.db.models.user import User
 from app.db.database import get_db_connection
 
@@ -140,7 +140,7 @@ async def save_user_preferences(
         # Check if user_preferences table exists, create if not
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_preferences (
-                user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                user_id UUID PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE,
                 preferences JSONB NOT NULL,
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW()
@@ -193,7 +193,7 @@ async def get_user_preferences(current_user: User = Depends(get_current_user)):
         # Ensure table exists
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_preferences (
-                user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                user_id UUID PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE,
                 preferences JSONB NOT NULL,
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW()
@@ -245,32 +245,51 @@ async def get_current_user_profile(current_user: User = Depends(get_current_user
     cursor = conn.cursor(cursor_factory=RealDictCursor)
 
     try:
-        # Check if preferences exist
-        cursor.execute("""
-            SELECT EXISTS(
-                SELECT 1 FROM user_preferences
+        # Check if preferences exist (handle if table doesn't exist)
+        has_completed_onboarding = False
+        try:
+            cursor.execute("""
+                SELECT EXISTS(
+                    SELECT 1 FROM user_preferences
+                    WHERE user_id = %s
+                    AND preferences->>'onboarding_completed' = 'true'
+                ) as has_completed_onboarding
+            """, (current_user.id,))
+            result = cursor.fetchone()
+            has_completed_onboarding = result['has_completed_onboarding'] if result else False
+        except Exception:
+            pass  # Table doesn't exist yet
+
+        # Get user segment from user_features table (or users table as fallback)
+        segment_id = 0
+        try:
+            cursor.execute("""
+                SELECT segment_id
+                FROM user_features
                 WHERE user_id = %s
-                AND preferences->>'onboarding_completed' = 'true'
-            ) as has_completed_onboarding
-        """, (current_user.id,))
-
-        result = cursor.fetchone()
-
-        # Get user segment from user_features table
-        cursor.execute("""
-            SELECT segment_id
-            FROM user_features
-            WHERE user_id = %s
-        """, (current_user.id,))
-
-        segment_result = cursor.fetchone()
-        segment_id = segment_result['segment_id'] if segment_result and segment_result['segment_id'] is not None else 0
+            """, (current_user.id,))
+            segment_result = cursor.fetchone()
+            if segment_result and segment_result['segment_id'] is not None:
+                segment_id = segment_result['segment_id']
+        except Exception:
+            # user_features table might not exist, try users table
+            try:
+                cursor.execute("""
+                    SELECT segment_id
+                    FROM users
+                    WHERE user_id = %s
+                """, (current_user.id,))
+                segment_result = cursor.fetchone()
+                if segment_result and segment_result['segment_id'] is not None:
+                    segment_id = segment_result['segment_id']
+            except Exception:
+                pass  # Use default segment_id = 0
 
         # Get segment info
         segment_info = SEGMENT_INFO.get(segment_id, SEGMENT_INFO[0])
 
         user_data = current_user.to_dict()
-        user_data['has_completed_onboarding'] = result['has_completed_onboarding'] if result else False
+        user_data['has_completed_onboarding'] = has_completed_onboarding
         user_data['segment'] = {
             "segment_id": segment_id,
             "name": segment_info['name'],
@@ -340,7 +359,7 @@ async def update_user_profile(
 
         # Execute update query
         query = f"""
-            UPDATE users
+            UPDATE app_users
             SET {', '.join(update_fields)}
             WHERE id = %s
             RETURNING id, name, email, phone, balance, is_admin, updated_at

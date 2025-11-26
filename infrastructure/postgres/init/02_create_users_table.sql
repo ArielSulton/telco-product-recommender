@@ -4,8 +4,8 @@
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Users table
-CREATE TABLE IF NOT EXISTS users (
+-- App users table (authentication - separate from ML customer data)
+CREATE TABLE IF NOT EXISTS app_users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     phone VARCHAR(15) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
@@ -17,8 +17,8 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- Index for faster phone lookups
-CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
-CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_app_users_phone ON app_users(phone);
+CREATE INDEX IF NOT EXISTS idx_app_users_role ON app_users(role);
 
 -- Seed data will be added via backend API using /auth/register endpoint
 -- This ensures proper password hashing with bcrypt
@@ -38,7 +38,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to auto-update updated_at
-CREATE TRIGGER update_users_updated_at
-    BEFORE UPDATE ON users
+CREATE TRIGGER update_app_users_updated_at
+    BEFORE UPDATE ON app_users
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();

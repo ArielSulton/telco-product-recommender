@@ -10,7 +10,7 @@ from datetime import datetime
 import requests
 import os
 
-from app.core.security import get_current_user
+from app.api.v1.endpoints.auth import get_current_user
 from app.db.models.user import User
 from app.db.database import get_db_connection
 
@@ -65,6 +65,17 @@ class AdminStatsResponse(BaseModel):
     total_revenue: int
     avg_data_usage_gb: float
     active_products: int
+
+
+class UserRecommendationItem(BaseModel):
+    """User recommendation item for admin view"""
+    user_id: str
+    username: str
+    phone: str
+    segment_name: str
+    total_purchases: int
+    last_purchase: Optional[str]
+    recommended_product: Optional[str]
 
 
 # ==============================================
@@ -147,7 +158,7 @@ async def get_admin_stats(
 
     try:
         # Total users
-        cursor.execute("SELECT COUNT(*) as count FROM users")
+        cursor.execute("SELECT COUNT(*) as count FROM app_users")
         total_users = cursor.fetchone()['count']
 
         # Total purchases and revenue
@@ -179,6 +190,96 @@ async def get_admin_stats(
             "avg_data_usage_gb": round(float(usage_stats['avg_usage_gb']), 2),
             "active_products": active_products
         }
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# Segment name mapping
+SEGMENT_NAMES = {
+    0: "Budget-Conscious",
+    1: "Premium User",
+    2: "Moderate User",
+    3: "Light User",
+    4: "Heavy User"
+}
+
+
+@router.get("/user-recommendations", response_model=List[UserRecommendationItem])
+async def get_user_recommendations(
+    limit: int = 10,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get user activity and recommendation overview for admin dashboard.
+
+    Shows recent users with their segments and purchase history.
+    Requires admin role.
+    """
+    check_admin_role(current_user)
+
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+    try:
+        # Get users with their segments and purchase info
+        cursor.execute("""
+            SELECT
+                u.id as user_id,
+                u.name as username,
+                u.phone,
+                COALESCE(ml.segment_id, 0) as segment_id,
+                COUNT(p.id) as total_purchases,
+                MAX(p.purchase_date) as last_purchase,
+                (
+                    SELECT pr.product_name
+                    FROM purchases p2
+                    JOIN products pr ON p2.product_id = pr.product_id
+                    WHERE p2.user_id = u.id
+                    ORDER BY p2.purchase_date DESC
+                    LIMIT 1
+                ) as last_purchased_product
+            FROM app_users u
+            LEFT JOIN users ml ON ml.user_id = u.id
+            LEFT JOIN purchases p ON p.user_id = u.id
+            WHERE u.role != 'admin'
+            GROUP BY u.id, u.name, u.phone, ml.segment_id
+            ORDER BY MAX(p.purchase_date) DESC NULLS LAST, u.created_at DESC
+            LIMIT %s
+        """, (limit,))
+
+        users = cursor.fetchall()
+
+        result = []
+        for user in users:
+            segment_id = user['segment_id'] or 0
+            segment_name = SEGMENT_NAMES.get(segment_id, "Unknown")
+
+            # Suggest a product based on segment
+            recommended = None
+            if user['total_purchases'] == 0:
+                recommended = "Paket Pemula"
+            elif segment_id == 0:
+                recommended = "Paket Hemat"
+            elif segment_id == 1:
+                recommended = "Paket Premium"
+            elif segment_id == 4:
+                recommended = "Paket Unlimited"
+            else:
+                recommended = "Paket Standard"
+
+            result.append(UserRecommendationItem(
+                user_id=str(user['user_id']),
+                username=user['username'] or "Unknown",
+                phone=user['phone'][-4:].rjust(len(user['phone']), '*'),  # Mask phone
+                segment_name=segment_name,
+                total_purchases=user['total_purchases'],
+                last_purchase=user['last_purchase'].isoformat() if user['last_purchase'] else None,
+                recommended_product=recommended
+            ))
+
+        return result
 
     finally:
         cursor.close()

@@ -138,7 +138,7 @@ class EventService:
             'product_id': product_id,
             'session_id': session_id or self._generate_session_id(),
             'ab_variant': ab_variant or 'control',
-            'metadata': metadata or {},
+            'event_metadata': metadata or {},  # Column name is 'event_metadata' in Event model
             'timestamp': timestamp or datetime.utcnow(),
             'created_at': datetime.utcnow()
         }

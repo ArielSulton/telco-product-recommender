@@ -66,7 +66,7 @@ def initialize_recommendation_service(
             cf_model=models.get('cf_model'),
             ranker=models.get('ranker'),
             baseline=models.get('baseline') or TopPopularBaseline(),
-            diversifier=MMRDiversifier(lambda_param=0.7),
+            diversifier=MMRDiversifier(),
             cache_client=redis_client,
             cache_ttl=cache_ttl
         )
@@ -261,15 +261,58 @@ async def get_recommendations(
         return response
 
     except ValueError as e:
-        # User not found
+        # User not found in ML database - return fallback popular products
         logger.warning(
-            f"User not found: {request.user_id}",
+            f"User not found in ML database: {request.user_id}, returning fallback recommendations",
             extra={"request_id": request_id}
         )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User {request.user_id} not found"
-        )
+
+        # Get fallback popular products from database
+        try:
+            from sqlalchemy import text
+            query = text("""
+                SELECT product_id, product_name, product_family, price,
+                       quota_data_mb, quota_voice_min, validity_days
+                FROM products
+                ORDER BY price ASC
+                LIMIT :limit
+            """)
+            result = await db.execute(query, {"limit": request.limit})
+            products = result.fetchall()
+
+            fallback_recommendations = [
+                RecommendationItem(
+                    product_id=p.product_id,
+                    product_name=p.product_name,
+                    score=0.5,  # Neutral score for fallback
+                    reason="Paket populer untuk pengguna baru",
+                    price=p.price,
+                    quota_data_mb=p.quota_data_mb,
+                    quota_voice_min=p.quota_voice_min or 0,
+                    cta_url=f"/products/{p.product_id}"
+                )
+                for p in products
+            ]
+
+            return RecommendResponse(
+                recommendations=fallback_recommendations,
+                metadata={
+                    "user_id": str(request.user_id),
+                    "segment_id": 0,
+                    "segment_name": "New User",
+                    "total_latency_ms": 0,
+                    "model_version": "fallback",
+                    "cached": False,
+                    "fallback": True,
+                    "request_id": request_id
+                }
+            )
+        except Exception as fallback_error:
+            logger.error(f"Fallback recommendations failed: {fallback_error}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User {request.user_id} not found and fallback failed"
+            )
 
     except RuntimeError as e:
         # Service unavailable
