@@ -172,7 +172,7 @@ docker compose -f compose.dev.yaml up -d prometheus grafana
 |---------|-----|-------------|
 | Frontend | http://localhost:5173 | N/A |
 | Backend API | http://localhost:8000 | N/A |
-| API Docs | http://localhost:8000/docs | N/A |
+| API Docs | http://localhost:8000/api/v1/docs | N/A |
 | MLflow | http://localhost:5000 | N/A |
 | Airflow | http://localhost:8080 | admin/admin |
 | Grafana | http://localhost:3000 | admin/admin |

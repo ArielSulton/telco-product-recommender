@@ -52,31 +52,41 @@ SEGMENT_INFO = {
 
 class UserPreferencesRequest(BaseModel):
     """User preferences for personalized recommendations"""
-    budget_range: str = Field(..., description="Budget range: low, medium, high")
+    budget_range: str = Field(..., description="Budget range: low/medium/high or ui labels (budget/medium/premium)")
     usage_type: str = Field(..., description="Primary usage: calls, internet, both")
     data_needs: str = Field(..., description="Data needs: light, moderate, heavy")
     preferred_features: list[str] = Field(default_factory=list, description="Preferred features")
 
     @validator('budget_range')
     def validate_budget_range(cls, v):
-        allowed = ['low', 'medium', 'high']
-        if v not in allowed:
-            raise ValueError(f'budget_range must be one of {allowed}')
-        return v
+        mapping = {
+            'budget': 'low',
+            'low': 'low',
+            'medium': 'medium',
+            'standard': 'medium',
+            'premium': 'high',
+            'high': 'high'
+        }
+        key = v.strip().lower()
+        if key not in mapping:
+            raise ValueError(f'budget_range must be one of {list(mapping.keys())}')
+        return mapping[key]
 
     @validator('usage_type')
     def validate_usage_type(cls, v):
         allowed = ['calls', 'internet', 'both']
-        if v not in allowed:
+        key = v.strip().lower()
+        if key not in allowed:
             raise ValueError(f'usage_type must be one of {allowed}')
-        return v
+        return key
 
     @validator('data_needs')
     def validate_data_needs(cls, v):
         allowed = ['light', 'moderate', 'heavy']
-        if v not in allowed:
+        key = v.strip().lower()
+        if key not in allowed:
             raise ValueError(f'data_needs must be one of {allowed}')
-        return v
+        return key
 
 
 class UserPreferencesResponse(BaseModel):

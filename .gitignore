@@ -27,6 +27,11 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Backend cache (prevent Docker permission issues)
+backend/**/__pycache__/
+services/**/__pycache__/
+infrastructure/**/__pycache__/
+
 # Virtual Environments
 venv/
 env/
@@ -164,6 +169,7 @@ Desktop.ini
 .vscode/
 .claude/
 .idea/
+CLAUDE.md
 *.swp
 *.swo
 *~

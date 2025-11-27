@@ -16,6 +16,7 @@ import logging
 from app.core.config import settings
 from app.ml.registry.mlflow_registry import MLflowRegistry, ModelLoader
 from app.ml.models.baseline.top_popular import TopPopularBaseline
+from app.ml.models.baseline.enhanced_baseline import EnhancedBaseline
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,8 @@ async def load_production_models(
 
     This function loads all models required for the hybrid recommendation pipeline:
     - K-Means segmentation model
-    - LightFM collaborative filtering model
+    - FixedLightFM collaborative filtering model (matrix factorization)
+    - EnhancedBaseline recommendation model (content/affinity/segment strategies)
     - XGBoost ranking model
 
     If models are not found in MLflow (e.g., first startup), falls back to baseline models.
@@ -42,9 +44,9 @@ async def load_production_models(
         Dictionary with loaded models:
         {
             'segmenter': KMeansSegmenter or None,
-            'cf_model': LightFMRecommender or None,
-            'ranker': XGBoostRanker or None,
-            'baseline': TopPopularBaseline or None
+            'cf_model': FixedLightFMRecommender or None,
+            'baseline': EnhancedBaseline or None,
+            'ranker': XGBoostRanker or None
         }
 
     Raises:
@@ -61,8 +63,8 @@ async def load_production_models(
     models = {
         'segmenter': None,
         'cf_model': None,
-        'ranker': None,
-        'baseline': None
+        'baseline': None,
+        'ranker': None
     }
 
     try:
@@ -91,13 +93,15 @@ async def load_production_models(
         loaded_count = sum(1 for m in models.values() if m is not None)
 
         if loaded_count > 0:
-            logger.info(f"✅ Loaded {loaded_count}/3 ML models from MLflow")
+            logger.info(f"✅ Loaded {loaded_count}/4 ML models from MLflow")
 
             # Log which models loaded successfully
             if models['segmenter']:
                 logger.info("  ✓ K-Means segmentation model loaded")
             if models['cf_model']:
-                logger.info("  ✓ LightFM collaborative filtering model loaded")
+                logger.info("  ✓ FixedLightFM collaborative filtering model loaded")
+            if models['baseline']:
+                logger.info("  ✓ EnhancedBaseline recommendation model loaded")
             if models['ranker']:
                 logger.info("  ✓ XGBoost ranking model loaded")
         else:
@@ -130,17 +134,24 @@ async def _load_baseline_models() -> Dict[str, Any]:
 
     models = {
         'segmenter': None,  # No baseline for segmentation
-        'cf_model': None,   # No baseline for CF
-        'ranker': None,     # No baseline for ranking
-        'baseline': None
+        'cf_model': None,   # No baseline for collaborative filtering (needs training data)
+        'baseline': None,   # EnhancedBaseline with TopPopular fallback
+        'ranker': None      # No baseline for ranking
     }
 
     try:
-        # Initialize baseline recommender
-        # This doesn't require training data, just product popularity
-        baseline = TopPopularBaseline()
-        models['baseline'] = baseline
-        logger.info("✅ Baseline model (TopPopular) loaded")
+        # Try to initialize EnhancedBaseline (preferred)
+        try:
+            # EnhancedBaseline wraps TopPopularBaseline + adds strategies
+            baseline = EnhancedBaseline()
+            models['baseline'] = baseline
+            logger.info("✅ Baseline model (EnhancedBaseline) loaded")
+        except Exception as e:
+            # Fallback to simple TopPopularBaseline if EnhancedBaseline fails
+            logger.warning(f"EnhancedBaseline initialization failed, using TopPopular: {str(e)}")
+            baseline = TopPopularBaseline()
+            models['baseline'] = baseline
+            logger.info("✅ Baseline model (TopPopular) loaded")
 
     except Exception as e:
         logger.error(f"❌ Failed to load baseline model: {str(e)}")
@@ -194,13 +205,14 @@ def check_models_health(models: Dict[str, Any]) -> Dict[str, bool]:
     health = {
         'segmenter': models.get('segmenter') is not None,
         'cf_model': models.get('cf_model') is not None,
-        'ranker': models.get('ranker') is not None,
         'baseline': models.get('baseline') is not None,
+        'ranker': models.get('ranker') is not None,
         'all_loaded': all([
             models.get('segmenter'),
-            models.get('cf_model'),
+            models.get('baseline'),  # CF model optional (can work without it)
             models.get('ranker')
-        ])
+        ]),
+        'cf_available': models.get('cf_model') is not None
     }
 
     return health

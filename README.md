@@ -65,7 +65,7 @@ docker compose -f compose.dev.yaml up -d
 
 # 3. Wait 2-3 minutes, then access:
 # - Frontend: http://localhost:5173
-# - Backend: http://localhost:8000/docs
+# - Backend: http://localhost:8000/api/v1/docs
 # - Airflow: http://localhost:8080 (admin/admin)
 # - Grafana: http://localhost:3000 (admin/admin)
 ```

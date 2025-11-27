@@ -2,19 +2,23 @@
 Hybrid Recommendation Pipeline
 ================================
 
-Multi-stage recommendation system integrating segmentation, collaborative filtering,
+Multi-stage recommendation system integrating segmentation, enhanced baseline,
 and learning-to-rank.
 
 Pipeline Stages:
 1. User Segmentation (K-Means) → User profiling
-2. Candidate Generation (LightFM) → 100 candidates per segment
+2. Candidate Generation (Hybrid) → 100 candidates using 4 strategies:
+   - Collaborative Filtering (40%) - LightFM matrix factorization
+   - Content-based similarity (30%) - Cosine similarity
+   - Rule-based affinity matching (20%) - Business rules
+   - Segment popularity (10%) - Segment top products
 3. Re-ranking (XGBoost) → Top 10 personalized recommendations
 4. Diversification (MMR) → Final diverse recommendation set
 
 Features:
 - Redis caching for intermediate results
 - Fallback strategies for cold-start
-- Latency monitoring (target: p95 ≤ 150ms)
+- Latency monitoring (target: p95 ≤ 100ms)
 - Feature engineering integration
 """
 
@@ -26,9 +30,9 @@ import logging
 from dataclasses import dataclass
 
 from app.ml.models.segmentation.kmeans_segmenter import KMeansSegmenter
-from app.ml.models.collaborative.lightfm_recommender import LightFMRecommender
 from app.ml.models.ranker.xgboost_ranker import XGBoostRanker
-from app.ml.models.baseline.top_popular import TopPopularBaseline
+from app.ml.models.baseline.enhanced_baseline import EnhancedBaseline
+from app.ml.models.collaborative.lightfm_recommender_fixed import FixedLightFMRecommender
 from app.ml.diversification.mmr import MMRDiversifier
 
 logger = logging.getLogger(__name__)
@@ -57,9 +61,9 @@ class HybridPipeline:
     def __init__(
         self,
         segmenter: Optional[KMeansSegmenter] = None,
-        cf_model: Optional[LightFMRecommender] = None,
+        cf_model: Optional[FixedLightFMRecommender] = None,
         ranker: Optional[XGBoostRanker] = None,
-        baseline: Optional[TopPopularBaseline] = None,
+        baseline: Optional[EnhancedBaseline] = None,
         diversifier: Optional[MMRDiversifier] = None,
         cache_client = None,
         cache_ttl: int = 3600
@@ -69,9 +73,9 @@ class HybridPipeline:
 
         Args:
             segmenter: K-Means segmentation model
-            cf_model: LightFM collaborative filtering model
+            cf_model: FixedLightFM collaborative filtering model
             ranker: XGBoost ranking model
-            baseline: Fallback baseline model
+            baseline: EnhancedBaseline (for content/affinity/segment strategies)
             diversifier: MMR diversification
             cache_client: Redis client for caching
             cache_ttl: Cache TTL in seconds
@@ -84,7 +88,7 @@ class HybridPipeline:
         self.cache_client = cache_client
         self.cache_ttl = cache_ttl
 
-        self.model_version = "v1.0.0"
+        self.model_version = "v2.0.0"  # Updated for 4-strategy hybrid
         self.is_ready = False
 
         # Performance tracking
@@ -104,16 +108,13 @@ class HybridPipeline:
             logger.error("Segmenter not initialized or trained")
             return False
 
-        if self.cf_model is None or not self.cf_model.is_trained:
-            logger.error("CF model not initialized or trained")
-            return False
-
         if self.ranker is None or not self.ranker.is_trained:
             logger.error("Ranker not initialized or trained")
             return False
 
-        if self.baseline is None:
-            logger.warning("Baseline model not provided - cold start handling limited")
+        if self.baseline is None or not self.baseline.is_fitted:
+            logger.error("Baseline model not initialized or fitted")
+            return False
 
         if self.diversifier is None:
             logger.warning("Diversifier not provided - diversity optimization disabled")
@@ -130,14 +131,19 @@ class HybridPipeline:
         product_catalog: pd.DataFrame,
         top_k: int = 5,
         candidate_pool_size: int = 100,
-        diversity_lambda: float = 0.7
+        diversity_lambda: float = 0.7,
+        exclude_products: Optional[List[str]] = None
     ) -> RecommendationResult:
         """
         Generate personalized recommendations.
 
         Pipeline:
         1. Get user segment from K-Means
-        2. Generate candidates from LightFM (100 items)
+        2. Generate candidates using 4 strategies (100 items total):
+           - Collaborative Filtering (40%) - Matrix factorization
+           - Content-based similarity (30%) - Cosine similarity
+           - Rule-based affinity (20%) - Business rules
+           - Segment popularity (10%) - Top products per segment
         3. Re-rank candidates with XGBoost
         4. Diversify results with MMR
         5. Add explanations and metadata
@@ -147,8 +153,9 @@ class HybridPipeline:
             user_features: User feature DataFrame (single row)
             product_catalog: Full product catalog
             top_k: Number of final recommendations
-            candidate_pool_size: CF candidate pool size
+            candidate_pool_size: Candidate pool size
             diversity_lambda: MMR diversity parameter (0=diverse, 1=relevant)
+            exclude_products: Products to exclude (already purchased)
 
         Returns:
             RecommendationResult with recommendations and metadata
@@ -169,12 +176,13 @@ class HybridPipeline:
 
             # Stage 2: Candidate Generation
             candidates = await self._generate_candidates(
-                user_id, segment_id, product_catalog, candidate_pool_size
+                user_id, segment_id, user_features, product_catalog,
+                candidate_pool_size, exclude_products
             )
 
             if not candidates:
                 # Fallback to baseline
-                logger.warning(f"No CF candidates for user {user_id}, using baseline")
+                logger.warning(f"No candidates for user {user_id}, using baseline")
                 return await self._fallback_recommend(
                     user_id, segment_id, segment_name, product_catalog, top_k
                 )
@@ -256,10 +264,31 @@ class HybridPipeline:
         self,
         user_id: str,
         segment_id: int,
+        user_features: pd.DataFrame,
         product_catalog: pd.DataFrame,
-        pool_size: int
+        pool_size: int,
+        exclude_products: Optional[List[str]] = None
     ) -> List[Tuple[str, float]]:
-        """Generate candidate products using CF + segment popularity."""
+        """
+        Generate candidate products using 4 hybrid strategies.
+
+        Combines four strategies:
+        1. Collaborative Filtering (40%) - Matrix factorization (LightFM)
+        2. Content-based similarity (30%) - Cosine similarity
+        3. Rule-based affinity matching (20%) - Business rules
+        4. Segment-based popularity (10%) - Top products per segment
+
+        Args:
+            user_id: User identifier
+            segment_id: User segment ID
+            user_features: User features DataFrame (single row)
+            product_catalog: Full product catalog
+            pool_size: Total number of candidates to generate
+            exclude_products: Products to exclude (already purchased)
+
+        Returns:
+            List of (product_id, score) tuples
+        """
         # Check cache
         cache_key = f"candidates:{user_id}:{pool_size}"
         if self.cache_client:
@@ -268,42 +297,121 @@ class HybridPipeline:
                 import json
                 return json.loads(cached_candidates)
 
-        # Get CF recommendations
-        cf_candidates = []
-        try:
-            cf_results = self.cf_model.predict(
-                user_ids=[user_id],
-                item_ids=product_catalog['product_id'].tolist(),
-                top_k=int(pool_size * 0.7)  # 70% from CF
-            )
-            cf_candidates = cf_results.get(user_id, [])
-        except Exception as e:
-            logger.warning(f"CF prediction failed for {user_id}: {str(e)}")
+        # Convert user_features DataFrame to dict
+        user_features_dict = user_features.iloc[0].to_dict()
 
-        # Get segment-based popular products
-        segment_candidates = []
-        if self.baseline:
+        # Calculate candidates per strategy
+        cf_k = int(pool_size * 0.4)         # 40% from collaborative filtering
+        similarity_k = int(pool_size * 0.3)  # 30% from content similarity
+        affinity_k = int(pool_size * 0.2)    # 20% from affinity matching
+        segment_k = int(pool_size * 0.1)     # 10% from segment popularity
+
+        all_candidates = []
+
+        # Strategy 1: Collaborative Filtering (40%) ⭐ NEW!
+        if self.cf_model and self.cf_model.is_fitted:
             try:
-                segment_candidates = self.baseline.recommend(
-                    segment=segment_id,
-                    top_k=int(pool_size * 0.3)  # 30% from popularity
-                )
-                # Convert to (product_id, score) format
-                segment_candidates = [(pid, 1.0) for pid in segment_candidates]
-            except Exception as e:
-                logger.warning(f"Baseline failed for segment {segment_id}: {str(e)}")
+                # Convert user_id to int for CF model
+                user_id_int = int(user_id) if isinstance(user_id, str) else user_id
 
-        # Merge and deduplicate
-        all_candidates = cf_candidates + segment_candidates
+                # Convert exclude_products to int if exists
+                exclude_products_int = None
+                if exclude_products:
+                    exclude_products_int = [
+                        int(pid) if isinstance(pid, str) else pid
+                        for pid in exclude_products
+                    ]
+
+                cf_recommendations = self.cf_model.recommend(
+                    user_id=user_id_int,
+                    n_recommendations=cf_k,
+                    exclude_products=exclude_products_int
+                )
+
+                # Convert CF recommendations to (product_id, score) tuples
+                cf_candidates = [
+                    (str(rec['product_id']), rec['score'])
+                    for rec in cf_recommendations
+                ]
+
+                all_candidates.extend(cf_candidates)
+                logger.debug(f"Generated {len(cf_candidates)} CF candidates")
+            except Exception as e:
+                logger.warning(f"CF recommendation failed for {user_id}: {str(e)}")
+                # Fallback: increase other strategies proportionally
+                similarity_k += int(cf_k * 0.4)
+                affinity_k += int(cf_k * 0.4)
+                segment_k += int(cf_k * 0.2)
+        else:
+            logger.warning(f"CF model not available, redistributing {cf_k} candidates")
+            # Redistribute CF allocation to other strategies
+            similarity_k += int(cf_k * 0.4)
+            affinity_k += int(cf_k * 0.4)
+            segment_k += int(cf_k * 0.2)
+
+        # Strategy 2: Content-based similarity (30%)
+        try:
+            similarity_candidates = self.baseline.recommend_by_similarity(
+                user_features=user_features_dict,
+                product_catalog=product_catalog,
+                top_k=similarity_k,
+                exclude_products=exclude_products
+            )
+            all_candidates.extend(similarity_candidates)
+            logger.debug(f"Generated {len(similarity_candidates)} similarity candidates")
+        except Exception as e:
+            logger.warning(f"Similarity recommendation failed for {user_id}: {str(e)}")
+
+        # Strategy 3: Rule-based affinity matching (20%)
+        try:
+            affinity_candidates = self.baseline.recommend_by_affinity(
+                user_features=user_features_dict,
+                product_catalog=product_catalog,
+                top_k=affinity_k,
+                exclude_products=exclude_products
+            )
+            all_candidates.extend(affinity_candidates)
+            logger.debug(f"Generated {len(affinity_candidates)} affinity candidates")
+        except Exception as e:
+            logger.warning(f"Affinity recommendation failed for {user_id}: {str(e)}")
+
+        # Strategy 4: Segment-based popularity (10%)
+        try:
+            segment_candidates = self.baseline.recommend_by_segment(
+                segment=segment_id,
+                top_k=segment_k,
+                exclude_products=exclude_products
+            )
+            all_candidates.extend(segment_candidates)
+            logger.debug(f"Generated {len(segment_candidates)} segment candidates")
+        except Exception as e:
+            logger.warning(f"Segment recommendation failed for {user_id}: {str(e)}")
+
+        # Merge and deduplicate (average scores if duplicate)
         seen = set()
         unique_candidates = []
+        product_scores = {}
+
         for product_id, score in all_candidates:
-            if product_id not in seen:
+            if product_id in product_scores:
+                # Average scores if product appears in multiple strategies
+                product_scores[product_id] = (product_scores[product_id] + score) / 2
+            else:
+                product_scores[product_id] = score
                 seen.add(product_id)
-                unique_candidates.append((product_id, score))
+
+        # Convert back to list of tuples and sort by score
+        unique_candidates = sorted(
+            product_scores.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )
 
         # Limit to pool size
         candidates = unique_candidates[:pool_size]
+
+        logger.info(f"Generated {len(candidates)} candidates for user {user_id} "
+                   f"(segment: {segment_id})")
 
         # Cache result
         if self.cache_client:

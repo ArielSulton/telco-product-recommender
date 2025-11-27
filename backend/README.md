@@ -78,7 +78,7 @@ backend/
 ## API Documentation
 
 Once the server is running, access:
-- **Swagger UI**: http://localhost:8000/docs
+- **Swagger UI**: http://localhost:8000/api/v1/docs
 - **ReDoc**: http://localhost:8000/redoc
 - **OpenAPI JSON**: http://localhost:8000/openapi.json
 

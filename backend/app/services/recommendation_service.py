@@ -14,17 +14,18 @@ Features:
 
 import json
 import time
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from uuid import UUID
 
 import pandas as pd
 import redis.asyncio as redis
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logging import logger
-from app.models.database import User, Product
+from app.models.database import User, Product, Transaction
 from app.ml.pipeline.hybrid_pipeline import HybridPipeline, RecommendationResult
 
 
@@ -95,6 +96,8 @@ class RecommendationService:
         """
         self.request_count += 1
         start_time = time.time()
+        exclude_products: List[str] = []
+        last_purchase: Optional[Dict] = None
 
         try:
             # 1. Check cache (unless force refresh)
@@ -119,11 +122,16 @@ class RecommendationService:
             # 3. Load product catalog
             product_catalog = await self._load_product_catalog(db)
 
+            # Recent purchases to avoid recommending the same package
+            exclude_products = await self._get_recent_purchases(user_id, db, days=90)
+            last_purchase = await self._get_latest_purchase(user_id, db)
+
             # 4. Generate recommendations
             result = await self.pipeline.recommend(
                 user_id=str(user_id),
                 user_features=user_features,
                 product_catalog=product_catalog,
+                exclude_products=exclude_products,
                 top_k=limit,
                 candidate_pool_size=settings.TOP_K_CANDIDATES,
                 diversity_lambda=settings.DIVERSITY_THRESHOLD
@@ -138,6 +146,9 @@ class RecommendationService:
             # Add latency metric
             total_latency = (time.time() - start_time) * 1000
             response["metadata"]["total_latency_ms"] = round(total_latency, 2)
+            response["metadata"]["excluded_products"] = exclude_products
+            if last_purchase:
+                response["metadata"]["last_purchase"] = last_purchase
 
             logger.info(
                 f"Generated {len(result.recommendations)} recommendations",
@@ -166,7 +177,12 @@ class RecommendationService:
             )
 
             # Try fallback to popular products
-            fallback = await self._fallback_recommendations(db, limit)
+            fallback = await self._fallback_recommendations(
+                db,
+                limit,
+                exclude_products=exclude_products,
+                last_purchase=last_purchase
+            )
             if fallback:
                 return fallback
 
@@ -253,6 +269,89 @@ class RecommendationService:
             logger.error(f"Failed to load product catalog: {str(e)}", exc_info=True)
             # Return empty catalog - will trigger fallback
             return pd.DataFrame()
+
+    async def _get_recent_purchases(
+        self,
+        user_id: UUID,
+        db: AsyncSession,
+        days: int = 90
+    ) -> List[str]:
+        """
+        Fetch recently purchased products to avoid recommending them again.
+        """
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=days)
+            result = await db.execute(
+                select(Transaction.product_id).where(
+                    Transaction.user_id == user_id,
+                    Transaction.status == "completed",
+                    Transaction.transaction_date >= cutoff
+                )
+            )
+            rows = result.all()
+            return [row[0] for row in rows]
+        except Exception as e:
+            logger.warning(f"Failed to load recent purchases for {user_id}: {str(e)}")
+            return []
+
+    async def _get_latest_purchase(
+        self,
+        user_id: UUID,
+        db: AsyncSession
+    ) -> Optional[Dict]:
+        """
+        Fetch the latest completed purchase with product details.
+        Tries `transactions` table first, then falls back to `purchases`.
+        """
+        try:
+            result = await db.execute(
+                select(Transaction, Product)
+                .join(Product, Transaction.product_id == Product.product_id)
+                .where(
+                    Transaction.user_id == user_id,
+                    Transaction.status == "completed"
+                )
+                .order_by(Transaction.transaction_date.desc())
+                .limit(1)
+            )
+            row = result.first()
+            if row:
+                txn, prod = row
+                return {
+                    "product_id": prod.product_id,
+                    "product_family": prod.product_family,
+                    "quota_data_mb": prod.quota_data_mb,
+                    "price": float(prod.price)
+                }
+
+            # Fallback to purchases table (raw SQL) if present
+            fallback_sql = text(
+                """
+                SELECT p.product_id,
+                       pr.product_family,
+                       pr.quota_data_mb,
+                       pr.price
+                FROM purchases p
+                LEFT JOIN products pr ON pr.product_id = p.product_id
+                WHERE p.user_id = :user_id
+                ORDER BY p.purchase_date DESC
+                LIMIT 1
+                """
+            )
+            raw = await db.execute(fallback_sql, {"user_id": str(user_id)})
+            raw_row = raw.first()
+            if raw_row:
+                return {
+                    "product_id": raw_row.product_id,
+                    "product_family": raw_row.product_family,
+                    "quota_data_mb": raw_row.quota_data_mb,
+                    "price": float(raw_row.price) if raw_row.price is not None else None
+                }
+
+        except Exception as e:
+            logger.warning(f"Failed to load latest purchase for {user_id}: {str(e)}")
+
+        return None
 
     def _format_response(self, result: RecommendationResult) -> Dict:
         """
@@ -345,7 +444,9 @@ class RecommendationService:
     async def _fallback_recommendations(
         self,
         db: AsyncSession,
-        limit: int
+        limit: int,
+        exclude_products: Optional[List[str]] = None,
+        last_purchase: Optional[Dict] = None
     ) -> Optional[Dict]:
         """
         Generate fallback recommendations using popular products.
@@ -353,6 +454,8 @@ class RecommendationService:
         Args:
             db: Database session
             limit: Number of recommendations
+            exclude_products: Products to filter out
+            last_purchase: Latest purchase details for personalization
 
         Returns:
             Fallback recommendations or None
@@ -364,9 +467,48 @@ class RecommendationService:
             if product_catalog.empty:
                 return None
 
-            # Sort by price (heuristic for popularity)
-            # In production, use actual popularity metrics
-            popular = product_catalog.head(limit)
+            # Filter out already purchased products
+            if exclude_products:
+                product_catalog = product_catalog[
+                    ~product_catalog['product_id'].isin(exclude_products)
+                ]
+
+            if product_catalog.empty:
+                return None
+
+            # Personalized fallback: bias to same family and higher quota/price
+            personalized = product_catalog
+            if last_purchase:
+                family = last_purchase.get("product_family")
+                quota = last_purchase.get("quota_data_mb")
+                price = last_purchase.get("price")
+
+                if family:
+                    personalized = personalized[
+                        personalized['product_family'] == family
+                    ]
+
+                if quota is not None and not personalized.empty:
+                    personalized = personalized[
+                        personalized['quota_data_mb'] >= quota
+                    ]
+
+                if price is not None and not personalized.empty:
+                    personalized = personalized[
+                        personalized['price'] >= price
+                    ]
+
+            # Fall back to full catalog if no personalized match
+            if personalized.empty:
+                personalized = product_catalog
+
+            # Sort by quota then price as a simple "upgrade" heuristic
+            personalized = personalized.sort_values(
+                by=['quota_data_mb', 'price'],
+                ascending=[False, False]
+            )
+
+            popular = personalized.head(limit)
 
             recommendations = []
             for _, product in popular.iterrows():
@@ -378,7 +520,7 @@ class RecommendationService:
                     'quota_data_mb': int(product['quota_data_mb']),
                     'quota_voice_min': int(product['quota_voice_min']),
                     'score': 0.5,
-                    'reason': "Popular product",
+                    'reason': "Mirip dengan paket terakhir kamu" if last_purchase else "Popular product",
                     'cta_url': f"/activate/{product['product_id']}"
                 })
 
@@ -387,7 +529,9 @@ class RecommendationService:
                 "metadata": {
                     "model_version": "fallback",
                     "cached": False,
-                    "fallback": True
+                    "fallback": True,
+                    "excluded_products": exclude_products or [],
+                    "last_purchase": last_purchase
                 }
             }
 

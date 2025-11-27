@@ -59,16 +59,9 @@ class FeaturesUpdatedWebhook(BaseModel):
 class ModelDeployedWebhook(BaseModel):
     """Webhook payload for model deployment notification."""
 
-    model_config = {"protected_namespaces": ()}
-
-    model_name: str = Field(..., description="Model name")
-    version: str = Field(..., description="Model version")
-    registry_uri: str = Field(..., description="MLflow registry URI")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    metadata: Optional[Dict] = Field(default={}, description="Model metadata")
-
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "protected_namespaces": (),
+        "json_schema_extra": {
             "example": {
                 "model_name": "xgboost_ranker",
                 "version": "v1.2.0",
@@ -80,6 +73,13 @@ class ModelDeployedWebhook(BaseModel):
                 }
             }
         }
+    }
+
+    model_name: str = Field(..., description="Model name")
+    version: str = Field(..., description="Model version")
+    registry_uri: str = Field(..., description="MLflow registry URI")
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    metadata: Optional[Dict] = Field(default={}, description="Model metadata")
 
 
 class BatchCompleteWebhook(BaseModel):

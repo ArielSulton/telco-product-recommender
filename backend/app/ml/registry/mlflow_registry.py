@@ -25,7 +25,8 @@ from mlflow.tracking import MlflowClient
 from mlflow.exceptions import MlflowException
 
 from app.ml.models.segmentation.kmeans_segmenter import KMeansSegmenter
-from app.ml.models.collaborative.lightfm_recommender import LightFMRecommender
+from app.ml.models.collaborative.lightfm_recommender_fixed import FixedLightFMRecommender
+from app.ml.models.baseline.enhanced_baseline import EnhancedBaseline
 from app.ml.models.ranker.xgboost_ranker import XGBoostRanker
 
 logger = logging.getLogger(__name__)
@@ -137,7 +138,11 @@ class MLflowRegistry:
 
         # LightFM Collaborative Filtering
         elif "lightfm" in model_name.lower() or "collaborative" in model_name.lower():
-            return self._load_lightfm(model_uri)
+            return self._load_lightfm_cf(model_uri)
+
+        # EnhancedBaseline Recommendation
+        elif "baseline" in model_name.lower() or "enhanced" in model_name.lower():
+            return self._load_baseline(model_uri)
 
         # XGBoost Ranker
         elif "xgboost" in model_name.lower() or "ranker" in model_name.lower():
@@ -159,15 +164,25 @@ class MLflowRegistry:
 
         return segmenter
 
-    def _load_lightfm(self, model_uri: str) -> LightFMRecommender:
-        """Load LightFM collaborative filtering model."""
+    def _load_lightfm_cf(self, model_uri: str) -> FixedLightFMRecommender:
+        """Load FixedLightFM collaborative filtering model."""
         local_path = mlflow.artifacts.download_artifacts(model_uri)
 
-        # Load LightFM model
-        recommender = LightFMRecommender()
-        recommender.load_model(os.path.join(local_path, "lightfm_model"))
+        # Load FixedLightFM model
+        cf_model = FixedLightFMRecommender()
+        cf_model.load_model(os.path.join(local_path, "lightfm_fixed.pkl"))
 
-        return recommender
+        return cf_model
+
+    def _load_baseline(self, model_uri: str) -> EnhancedBaseline:
+        """Load EnhancedBaseline recommendation model."""
+        local_path = mlflow.artifacts.download_artifacts(model_uri)
+
+        # Load EnhancedBaseline model
+        baseline = EnhancedBaseline()
+        baseline.load_model(os.path.join(local_path, "enhanced_baseline.pkl"))
+
+        return baseline
 
     def _load_xgboost(self, model_uri: str) -> XGBoostRanker:
         """Load XGBoost ranking model."""
@@ -349,7 +364,7 @@ class MLflowRegistry:
             logger.error(f"MLflow health check failed: {str(e)}")
 
         # Check cached models
-        for cache_key, (model, cached_at) in self.model_cache.items():
+        for cache_key, (_, cached_at) in self.model_cache.items():
             age = datetime.now() - cached_at
             health['model_details'].append({
                 'key': cache_key,
@@ -401,12 +416,19 @@ class ModelLoader:
             logger.error(f"Failed to load segmenter: {str(e)}")
             models['segmenter'] = self._load_fallback("segmenter")
 
-        # Load LightFM CF model
+        # Load FixedLightFM collaborative filtering model
         try:
-            models['cf_model'] = self.registry.load_model("lightfm_collaborative", stage="Production")
+            models['cf_model'] = self.registry.load_model("lightfm_collaborative_fixed", stage="Production")
         except Exception as e:
             logger.error(f"Failed to load CF model: {str(e)}")
             models['cf_model'] = self._load_fallback("cf_model")
+
+        # Load EnhancedBaseline model
+        try:
+            models['baseline'] = self.registry.load_model("enhanced_baseline", stage="Production")
+        except Exception as e:
+            logger.error(f"Failed to load baseline model: {str(e)}")
+            models['baseline'] = self._load_fallback("baseline")
 
         # Load XGBoost ranker
         try:

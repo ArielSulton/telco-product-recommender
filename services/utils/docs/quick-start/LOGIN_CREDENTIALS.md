@@ -38,7 +38,7 @@ Segment: 3 (Budget Plan)
 
 **Frontend**: http://localhost:5173
 **Login Page**: http://localhost:5173/login
-**Backend API**: http://localhost:8000/docs
+**Backend API**: http://localhost:8000/api/v1/docs
 
 ---
 

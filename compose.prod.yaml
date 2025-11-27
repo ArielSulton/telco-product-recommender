@@ -267,7 +267,8 @@ services:
     command: >
       mlflow server
       --backend-store-uri postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/mlflow
-      --default-artifact-root /mlflow/artifacts
+      --serve-artifacts
+      --artifacts-destination /mlflow/artifacts
       --host 0.0.0.0
       --port 5000
     logging:
@@ -380,6 +381,7 @@ services:
       - ./services:/opt/airflow/services:ro
       - ./ml/data:/opt/airflow/ml/data:ro
       - airflow_logs:/opt/airflow/logs
+      - mlflow_data:/mlflow:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -387,7 +389,7 @@ services:
       - telco-network
     entrypoint: /bin/bash
     command: >
-      -c "airflow db upgrade &&
+      -c "airflow db migrate &&
           airflow users create
           --username ${AIRFLOW_ADMIN_USER}
           --password ${AIRFLOW_ADMIN_PASSWORD}
@@ -407,6 +409,11 @@ services:
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY}
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_ARTIFACT_ROOT=mlflow-artifacts:/mlflow/artifacts
+      - AIRFLOW__WEBSERVER__BASE_URL=http://airflow-webserver:8080
+      - AIRFLOW_CONN_TELCO_POSTGRES=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/${DATABASE_NAME}
+      - AIRFLOW__WEBSERVER__WEB_SERVER_URL=http://airflow-webserver:8080
+      - AIRFLOW_CONN_FASTAPI_BACKEND=http://backend:8000
     expose:
       - "8080"
     volumes:
@@ -416,6 +423,7 @@ services:
       - ./services:/opt/airflow/services:ro
       - ./ml/data:/opt/airflow/ml/data:ro
       - airflow_logs:/opt/airflow/logs
+      - mlflow_data:/mlflow:ro
     depends_on:
       - airflow-init
     networks:
@@ -452,9 +460,14 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/airflow
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_ARTIFACT_ROOT=mlflow-artifacts:/mlflow/artifacts
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - AIRFLOW__WEBSERVER__BASE_URL=http://airflow-webserver:8080
+      - AIRFLOW_CONN_TELCO_POSTGRES=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/${DATABASE_NAME}
+      - AIRFLOW__WEBSERVER__WEB_SERVER_URL=http://airflow-webserver:8080
+      - AIRFLOW_CONN_FASTAPI_BACKEND=http://backend:8000
     volumes:
       - ./infrastructure/airflow/dags:/opt/airflow/dags:ro
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins:ro
@@ -482,6 +495,49 @@ services:
         reservations:
           cpus: '1'
           memory: 2G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ML Training & Jupyter Notebook (Optional for Production)
+  ml:
+    build:
+      context: ./ml
+      dockerfile: Dockerfile
+      target: training
+    container_name: telco-ml-prod
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - JUPYTER_ENABLE_LAB=yes
+    expose:
+      - "8888"
+    volumes:
+      - ./ml:/app:ro
+      - mlflow_data:/mlflow:ro
+    working_dir: /app
+    networks:
+      - telco-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8888 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    command: ["jupyter", "notebook", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=${JUPYTER_TOKEN:-}"]
+    labels:
+      - "com.telco.service=ml-notebook"
+      - "com.telco.version=${VERSION:-1.0.0}"
     logging:
       driver: "json-file"
       options:

@@ -31,7 +31,6 @@ if not Path(BACKEND_PATH).exists():
 sys.path.insert(0, BACKEND_PATH)
 
 from app.ml.models.baseline.top_popular import TopPopularRecommender
-from app.core.config import settings
 
 # Setup logging
 logging.basicConfig(
@@ -118,9 +117,32 @@ def register_to_mlflow(model: TopPopularRecommender, experiment_name: str = "tel
     """Register model to MLflow with Production stage."""
     logger.info(f"Registering model to MLflow experiment: {experiment_name}")
 
-    # Set tracking URI
-    mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(experiment_name)
+    # Set tracking URI and artifact location
+    mlflow_uri = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow:5000')
+    artifact_root = os.getenv('MLFLOW_ARTIFACT_ROOT', 'mlflow-artifacts:/mlflow/artifacts')
+
+    logger.info(f"MLflow Tracking URI: {mlflow_uri}")
+    logger.info(f"MLflow Artifact Root: {artifact_root}")
+
+    mlflow.set_tracking_uri(mlflow_uri)
+    experiment = mlflow.get_experiment_by_name(experiment_name)
+    if experiment is None:
+        if artifact_root:
+            logger.info(f"Creating experiment with artifact root: {artifact_root}")
+            mlflow.create_experiment(
+                name=experiment_name,
+                artifact_location=artifact_root,
+            )
+        else:
+            logger.info("Creating experiment with default artifact location (no MLFLOW_ARTIFACT_ROOT set)")
+        mlflow.set_experiment(experiment_name)
+    else:
+        if artifact_root and experiment.artifact_location != artifact_root:
+            logger.warning(
+                f"Existing experiment artifact location ({experiment.artifact_location}) "
+                f"differs from configured artifact root ({artifact_root})."
+            )
+        mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(run_name="baseline-demo"):
         # Log model parameters
@@ -177,6 +199,8 @@ def main():
     logger.info("Starting Demo ML Training")
     logger.info("=" * 60)
 
+    mlflow_uri = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow:5000')
+
     # Paths - flexible for dev and production
     csv_path = os.getenv('DATA_SOURCE_PATH', None)
 
@@ -216,7 +240,7 @@ def main():
         logger.info("✅ Demo ML Training Complete")
         logger.info(f"Run ID: {run_id}")
         logger.info(f"Model: baseline-recommender (Production stage)")
-        logger.info(f"MLflow URI: {settings.MLFLOW_TRACKING_URI}")
+        logger.info(f"MLflow URI: {mlflow_uri}")
         logger.info("=" * 60)
 
         # Test recommendation

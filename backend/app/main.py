@@ -91,7 +91,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         except Exception as e:
             logger.error(f"❌ Failed to load ML models: {str(e)}")
             # Continue with empty models - services will use fallbacks
-            models = {'segmenter': None, 'cf_model': None, 'ranker': None, 'baseline': None}
+            models = {'segmenter': None, 'cf_model': None, 'baseline': None, 'ranker': None}
 
         # Initialize recommendation service
         try:

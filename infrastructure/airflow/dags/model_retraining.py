@@ -46,7 +46,8 @@ if backend_path not in sys.path:
 
 # ML model imports
 from app.ml.models.segmentation.kmeans_segmenter import KMeansSegmenter
-from app.ml.models.collaborative.lightfm_recommender import LightFMRecommender
+from app.ml.models.collaborative.lightfm_recommender_fixed import FixedLightFMRecommender
+from app.ml.models.baseline.enhanced_baseline import EnhancedBaseline
 from app.ml.models.ranker.xgboost_ranker import XGBoostRanker
 
 
@@ -72,7 +73,12 @@ def check_data_drift(**context):
 
     # Get reference distribution (last training data)
     reference_data = hook.get_pandas_df("""
-        SELECT recency, frequency, monetary, arpu, usage_7d_data_mb, churn_score
+        SELECT recency,
+               frequency,
+               monetary,
+               usage_7d_mb,
+               usage_30d_mb,
+               churn_score
         FROM user_features
         WHERE updated_at < NOW() - INTERVAL '7 days'
         LIMIT 10000
@@ -80,7 +86,12 @@ def check_data_drift(**context):
 
     # Get current distribution
     current_data = hook.get_pandas_df("""
-        SELECT recency, frequency, monetary, arpu, usage_7d_data_mb, churn_score
+        SELECT recency,
+               frequency,
+               monetary,
+               usage_7d_mb,
+               usage_30d_mb,
+               churn_score
         FROM user_features
         WHERE updated_at >= NOW() - INTERVAL '7 days'
         LIMIT 10000
@@ -184,8 +195,14 @@ def train_segmentation_model(**context):
 
     with mlflow.start_run(run_name=f"kmeans_retraining_{datetime.now().strftime('%Y%m%d')}"):
         # Train
-        feature_cols = ['recency', 'frequency', 'monetary', 'arpu',
-                       'usage_7d_data_mb', 'churn_score']
+        feature_cols = [
+            'recency',
+            'frequency',
+            'monetary',
+            'usage_7d_mb',
+            'usage_30d_mb',
+            'churn_score'
+        ]
         X = features_df[feature_cols].fillna(0)
 
         labels = segmenter.fit(X)
@@ -216,123 +233,243 @@ def train_segmentation_model(**context):
 
         print(f"✅ K-Means trained - Silhouette: {silhouette:.4f}")
 
+        # Push segments to XCom for baseline model
+        user_segments = pd.Series(labels, index=features_df.index, name='segment_id')
+        context['ti'].xcom_push(key='user_segments', value=user_segments.to_dict())
+
         context['ti'].xcom_push(key='kmeans_run_id', value=run_id)
         context['ti'].xcom_push(key='kmeans_silhouette', value=silhouette)
 
 
 def train_collaborative_model(**context):
-    """Train LightFM collaborative filtering model."""
-    print("🤝 Training LightFM Collaborative Filtering Model...")
+    """Train FixedLightFM collaborative filtering model."""
+    print("🤝 Training FixedLightFM Collaborative Filtering Model...")
 
     # Load data
     transactions_df = pd.read_parquet('/tmp/training_transactions.parquet')
-    events_df = pd.read_parquet('/tmp/training_events.parquet')
 
     mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow:5000'))
     mlflow.set_experiment('model_retraining')
 
-    # Train model
-    recommender = LightFMRecommender(no_components=50, loss='warp')
-
     with mlflow.start_run(run_name=f"lightfm_retraining_{datetime.now().strftime('%Y%m%d')}"):
-        # Prepare interactions
-        interactions = transactions_df[['user_id', 'product_id']].copy()
-        interactions['rating'] = 1.0  # Implicit feedback
-
-        # ✅ Split into train/test sets (chronological split for realistic evaluation)
-        if 'transaction_date' in transactions_df.columns:
-            interactions['transaction_date'] = transactions_df['transaction_date']
-            interactions = interactions.sort_values('transaction_date')
-            interactions = interactions.drop('transaction_date', axis=1)
-
-        split_idx = int(len(interactions) * 0.8)
-        train_interactions = interactions.iloc[:split_idx].copy()
-        test_interactions = interactions.iloc[split_idx:].copy()
-
-        print(f"📊 Train: {len(train_interactions)} interactions, Test: {len(test_interactions)} interactions")
-
-        # ✅ Prepare training data
-        train_matrix, user_feat_matrix, item_feat_matrix = recommender.prepare_data(
-            train_interactions,
-            user_features=None,
-            item_features=None
+        # Initialize FixedLightFM model
+        cf_model = FixedLightFMRecommender(
+            no_components=50,
+            loss='warp',
+            learning_rate=0.05,
+            user_alpha=1e-6,
+            item_alpha=1e-6
         )
 
-        # ✅ Train on training set only
-        train_metrics = recommender.train(
-            interaction_matrix=train_matrix,
-            user_features=user_feat_matrix,
-            item_features=item_feat_matrix,
+        # Prepare interaction matrix with weighted ratings
+        interaction_matrix = cf_model.prepare_data(
+            interactions_df=transactions_df[['user_id', 'product_id', 'amount']],
+            weight_by_amount=True
+        )
+
+        print(f"📊 Interaction matrix: {interaction_matrix.shape}, nnz: {interaction_matrix.nnz}")
+        print(f"   Sparsity: {1 - interaction_matrix.nnz / (interaction_matrix.shape[0] * interaction_matrix.shape[1]):.4f}")
+
+        # Train model
+        train_metrics = cf_model.train(
+            interaction_matrix=interaction_matrix,
             epochs=30,
             num_threads=4,
             verbose=True
         )
 
-        # ✅ Prepare test data (reuse same dataset for consistent mappings)
-        test_matrix, _, _ = recommender.prepare_data(test_interactions)
+        print(f"📈 Training Metrics:")
+        for metric_name, metric_value in train_metrics.items():
+            print(f"   {metric_name}: {metric_value:.4f}")
 
-        # ✅ Evaluate on test set
-        from lightfm.evaluation import precision_at_k, recall_at_k, auc_score
+        # Evaluate on training data (simplified for DAG)
+        eval_metrics = cf_model.evaluate(
+            interaction_matrix=interaction_matrix,
+            k_values=[5, 10, 20]
+        )
 
-        test_precision_5 = precision_at_k(
-            recommender.model,
-            test_matrix,
-            user_features=user_feat_matrix,
-            item_features=item_feat_matrix,
-            k=5
-        ).mean()
+        print(f"📈 Evaluation Metrics:")
+        for metric_name, metric_value in eval_metrics.items():
+            print(f"   {metric_name}: {metric_value:.4f}")
 
-        test_recall_10 = recall_at_k(
-            recommender.model,
-            test_matrix,
-            user_features=user_feat_matrix,
-            item_features=item_feat_matrix,
-            k=10
-        ).mean()
-
-        test_auc = auc_score(
-            recommender.model,
-            test_matrix,
-            user_features=user_feat_matrix,
-            item_features=item_feat_matrix
-        ).mean()
-
-        print(f"📈 Test Metrics: P@5={test_precision_5:.4f}, R@10={test_recall_10:.4f}, AUC={test_auc:.4f}")
-
-        # ✅ Log parameters
+        # Log parameters
+        mlflow.log_param("model_type", "FixedLightFMRecommender")
         mlflow.log_param("no_components", 50)
         mlflow.log_param("loss", "warp")
-        mlflow.log_param("training_interactions", len(train_interactions))
-        mlflow.log_param("test_interactions", len(test_interactions))
+        mlflow.log_param("learning_rate", 0.05)
+        mlflow.log_param("user_alpha", 1e-6)
+        mlflow.log_param("item_alpha", 1e-6)
         mlflow.log_param("epochs", 30)
+        mlflow.log_param("n_users", interaction_matrix.shape[0])
+        mlflow.log_param("n_products", interaction_matrix.shape[1])
+        mlflow.log_param("n_interactions", interaction_matrix.nnz)
+        mlflow.log_param("sparsity", 1 - interaction_matrix.nnz / (interaction_matrix.shape[0] * interaction_matrix.shape[1]))
 
-        # ✅ Log training metrics
-        mlflow.log_metric("train_precision_at_5", train_metrics['train_precision_at_5'])
-        mlflow.log_metric("train_recall_at_10", train_metrics['train_recall_at_10'])
-        mlflow.log_metric("train_auc", train_metrics['train_auc'])
+        # Log training metrics
+        for metric_name, metric_value in train_metrics.items():
+            mlflow.log_metric(metric_name, metric_value)
 
-        # ✅ Log test metrics
-        mlflow.log_metric("test_precision_at_5", float(test_precision_5))
-        mlflow.log_metric("test_recall_at_10", float(test_recall_10))
-        mlflow.log_metric("test_auc", float(test_auc))
+        # Log evaluation metrics
+        for metric_name, metric_value in eval_metrics.items():
+            mlflow.log_metric(metric_name, metric_value)
 
-        # Save model (LightFM requires custom serialization)
-        import pickle
-        model_path = "/tmp/lightfm_model.pkl"
-        with open(model_path, 'wb') as f:
-            pickle.dump(recommender, f)
+        # Save model
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            model_path = os.path.join(tmpdir, "lightfm_fixed.pkl")
+            cf_model.save_model(model_path)
+            mlflow.log_artifact(model_path)
 
-        mlflow.log_artifact(model_path, "model")
+        # Register model
+        model_uri = f"runs:/{mlflow.active_run().info.run_id}/lightfm_fixed.pkl"
+        mlflow.register_model(model_uri, "lightfm_collaborative_fixed")
 
         run_id = mlflow.active_run().info.run_id
 
-        print(f"✅ LightFM trained - {len(train_interactions)} train + {len(test_interactions)} test interactions")
-        print(f"   Train: P@5={train_metrics['train_precision_at_5']:.4f}, R@10={train_metrics['train_recall_at_10']:.4f}")
-        print(f"   Test: P@5={test_precision_5:.4f}, R@10={test_recall_10:.4f}, AUC={test_auc:.4f}")
+        print(f"✅ FixedLightFM trained - P@5={eval_metrics.get('train_precision_at_5', 0):.4f}, AUC={eval_metrics.get('train_auc', 0):.4f}")
 
-        context['ti'].xcom_push(key='lightfm_run_id', value=run_id)
-        context['ti'].xcom_push(key='lightfm_test_precision', value=float(test_precision_5))
-        context['ti'].xcom_push(key='lightfm_test_recall', value=float(test_recall_10))
+        context['ti'].xcom_push(key='cf_run_id', value=run_id)
+        context['ti'].xcom_push(key='cf_precision_5', value=float(eval_metrics.get('train_precision_at_5', 0)))
+        context['ti'].xcom_push(key='cf_auc', value=float(eval_metrics.get('train_auc', 0)))
+
+
+def train_baseline_model(**context):
+    """Train EnhancedBaseline recommendation model."""
+    print("📊 Training EnhancedBaseline Recommendation Model...")
+
+    # Load data
+    transactions_df = pd.read_parquet('/tmp/training_transactions.parquet')
+    features_df = pd.read_parquet('/tmp/training_features.parquet')
+
+    # Load product catalog from database
+    hook = PostgresHook(postgres_conn_id='telco_postgres')
+    product_catalog_df = hook.get_pandas_df("""
+        SELECT id as product_id,
+               name,
+               price,
+               quota_data_mb,
+               quota_voice_min,
+               validity_days,
+               product_family
+        FROM products
+    """)
+
+    mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow:5000'))
+    mlflow.set_experiment('model_retraining')
+
+    with mlflow.start_run(run_name=f"baseline_retraining_{datetime.now().strftime('%Y%m%d')}"):
+        # Initialize EnhancedBaseline
+        baseline = EnhancedBaseline()
+
+        # Get user segments from context (from train_kmeans task)
+        segments_dict = context['ti'].xcom_pull(key='user_segments')
+        if segments_dict is None:
+            print("⚠️ No segments found, using default segmentation")
+            segments = pd.Series([0] * len(features_df), index=features_df.index)
+        else:
+            segments = pd.Series(segments_dict)
+
+        # Fit baseline model
+        baseline.fit(
+            transactions=transactions_df,
+            segments=segments,
+            product_catalog=product_catalog_df
+        )
+
+        # ✅ Split data for evaluation (chronological)
+        if 'transaction_date' in transactions_df.columns:
+            transactions_sorted = transactions_df.sort_values('transaction_date')
+            split_idx = int(len(transactions_sorted) * 0.8)
+            train_transactions = transactions_sorted.iloc[:split_idx]
+            test_transactions = transactions_sorted.iloc[split_idx:]
+        else:
+            split_idx = int(len(transactions_df) * 0.8)
+            train_transactions = transactions_df.iloc[:split_idx]
+            test_transactions = transactions_df.iloc[split_idx:]
+
+        print(f"📊 Train: {len(train_transactions)} transactions, Test: {len(test_transactions)} transactions")
+
+        # ✅ Evaluate on test set
+        from sklearn.metrics import ndcg_score
+
+        # Generate recommendations for test users
+        test_users = test_transactions['user_id'].unique()
+        test_precision_scores = []
+        test_recall_scores = []
+        test_ndcg_scores = []
+
+        for user_id in test_users[:100]:  # Sample 100 users for evaluation
+            # Get actual purchases
+            actual_products = set(test_transactions[test_transactions['user_id'] == user_id]['product_id'])
+
+            if len(actual_products) == 0:
+                continue
+
+            # Get recommendations
+            try:
+                user_segment = segments.get(user_id, 0)
+                recommendations = baseline.recommend(
+                    user_id=user_id,
+                    user_segment=user_segment,
+                    user_features=features_df[features_df.index == user_id].iloc[0].to_dict() if user_id in features_df.index else {},
+                    n_recommendations=10
+                )
+
+                predicted_products = set([rec['product_id'] for rec in recommendations])
+
+                # Calculate metrics
+                hits_5 = len(actual_products & set(list(predicted_products)[:5]))
+                hits_10 = len(actual_products & predicted_products)
+
+                precision_5 = hits_5 / 5
+                recall_10 = hits_10 / len(actual_products) if actual_products else 0
+
+                test_precision_scores.append(precision_5)
+                test_recall_scores.append(recall_10)
+
+            except Exception as e:
+                print(f"⚠️ Error evaluating user {user_id}: {e}")
+                continue
+
+        # Average metrics
+        test_precision_5 = np.mean(test_precision_scores) if test_precision_scores else 0.0
+        test_recall_10 = np.mean(test_recall_scores) if test_recall_scores else 0.0
+
+        print(f"📈 Test Metrics: P@5={test_precision_5:.4f}, R@10={test_recall_10:.4f}")
+
+        # ✅ Log parameters
+        mlflow.log_param("model_type", "EnhancedBaseline")
+        mlflow.log_param("segment_weight", 0.5)
+        mlflow.log_param("affinity_weight", 0.3)
+        mlflow.log_param("content_weight", 0.2)
+        mlflow.log_param("training_transactions", len(train_transactions))
+        mlflow.log_param("test_transactions", len(test_transactions))
+        mlflow.log_param("n_products", len(product_catalog_df))
+        mlflow.log_param("n_segments", segments.nunique())
+
+        # ✅ Log test metrics
+        mlflow.log_metric("test_precision_at_5", test_precision_5)
+        mlflow.log_metric("test_recall_at_10", test_recall_10)
+
+        # Save model
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            model_path = os.path.join(tmpdir, "enhanced_baseline.pkl")
+            baseline.save_model(model_path)
+            mlflow.log_artifact(model_path)
+
+        # Register model
+        model_uri = f"runs:/{mlflow.active_run().info.run_id}/enhanced_baseline.pkl"
+        mlflow.register_model(model_uri, "enhanced_baseline")
+
+        run_id = mlflow.active_run().info.run_id
+
+        print(f"✅ EnhancedBaseline trained - {len(train_transactions)} train + {len(test_transactions)} test transactions")
+        print(f"   Test: P@5={test_precision_5:.4f}, R@10={test_recall_10:.4f}")
+
+        context['ti'].xcom_push(key='baseline_run_id', value=run_id)
+        context['ti'].xcom_push(key='baseline_test_precision', value=float(test_precision_5))
+        context['ti'].xcom_push(key='baseline_test_recall', value=float(test_recall_10))
 
 
 def train_ranker_model(**context):
@@ -603,13 +740,15 @@ def promote_models(**context):
 
     # Get run IDs
     kmeans_run_id = context['ti'].xcom_pull(key='kmeans_run_id')
-    lightfm_run_id = context['ti'].xcom_pull(key='lightfm_run_id')
+    cf_run_id = context['ti'].xcom_pull(key='cf_run_id')
+    baseline_run_id = context['ti'].xcom_pull(key='baseline_run_id')
     xgboost_run_id = context['ti'].xcom_pull(key='xgboost_run_id')
 
     # ✅ Promote all models using consistent logic
     models_to_promote = [
         ('kmeans_segmentation', kmeans_run_id, 'K-Means'),
-        ('lightfm_collaborative', lightfm_run_id, 'LightFM'),
+        ('lightfm_collaborative_fixed', cf_run_id, 'FixedLightFM'),
+        ('enhanced_baseline', baseline_run_id, 'EnhancedBaseline'),
         ('xgboost_ranker', xgboost_run_id, 'XGBoost')
     ]
 
@@ -650,7 +789,7 @@ def promote_models(**context):
 
     # Summary
     print(f"\n📊 Promotion Summary:")
-    print(f"  ✅ Successfully promoted: {promoted_count}/3 models")
+    print(f"  ✅ Successfully promoted: {promoted_count}/4 models")
     if failed_models:
         print(f"  ❌ Failed models: {', '.join(failed_models)}")
 
@@ -726,9 +865,15 @@ with DAG(
         provide_context=True
     )
 
-    train_lightfm = PythonOperator(
+    train_cf = PythonOperator(
         task_id='train_collaborative',
         python_callable=train_collaborative_model,
+        provide_context=True
+    )
+
+    train_baseline = PythonOperator(
+        task_id='train_baseline',
+        python_callable=train_baseline_model,
         provide_context=True
     )
 
@@ -764,16 +909,31 @@ with DAG(
     notify_api = SimpleHttpOperator(
         task_id='notify_fastapi',
         http_conn_id='fastapi_backend',
-        endpoint='/api/v1/webhooks/models-updated',
+        endpoint='/api/v1/webhooks/model-deployed',
         method='POST',
         headers={"Content-Type": "application/json"},
-        data='{"status": "models_promoted", "timestamp": "{{ ts }}"}',
+        data='''
+        {
+          "model_name": "retraining_batch",
+          "version": "latest",
+          "registry_uri": "models:/xgboost_ranker/Production",
+          "timestamp": "{{ ts }}",
+          "metadata": {
+            "kmeans_run_id": "{{ ti.xcom_pull(key='kmeans_run_id') }}",
+            "cf_run_id": "{{ ti.xcom_pull(key='cf_run_id') }}",
+            "baseline_run_id": "{{ ti.xcom_pull(key='baseline_run_id') }}",
+            "xgboost_run_id": "{{ ti.xcom_pull(key='xgboost_run_id') }}",
+            "dag_id": "{{ dag.dag_id }}",
+            "run_id": "{{ run_id }}"
+          }
+        }
+        ''',
         trigger_rule=TriggerRule.ONE_SUCCESS
     )
 
     # DAG flow
     check_drift >> [skip, prepare_data]
-    prepare_data >> [train_kmeans, train_lightfm, train_xgboost]
-    [train_kmeans, train_lightfm, train_xgboost] >> validate
+    prepare_data >> [train_kmeans, train_cf, train_baseline, train_xgboost]
+    [train_kmeans, train_cf, train_baseline, train_xgboost] >> validate
     validate >> [promote, rollback]
     [promote, rollback, skip] >> notify_api

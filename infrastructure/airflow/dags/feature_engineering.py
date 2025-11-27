@@ -303,6 +303,9 @@ def notify_fastapi_webhook(**context):
         dict: Notification payload with feature computation metrics
     """
     ti = context['task_instance']
+    dag_run = context.get('dag_run')
+    run_id = dag_run.run_id if dag_run else "manual"
+    dag_id = dag_run.dag_id if dag_run else "feature_engineering"
 
     # Gather metrics from upstream tasks
     rfm_users = ti.xcom_pull(key='rfm_users_processed', task_ids='compute_rfm')
@@ -310,16 +313,25 @@ def notify_fastapi_webhook(**context):
     rfm_scores = ti.xcom_pull(key='rfm_scores_processed', task_ids='compute_rfm_scores')
     cached_users = ti.xcom_pull(key='cached_users', task_ids='cache_to_redis')
 
+    # Build payload that matches FastAPI schema (batch_id, num_users, metadata)
+    batch_id = f"{dag_id}_{run_id}"
+    num_users = cached_users or rfm_users or 0
+
     payload = {
-        'event': 'features_updated',
-        'timestamp': datetime.now().isoformat(),
-        'metrics': {
-            'rfm_users_processed': rfm_users,
-            'arpu_users_processed': arpu_users,
-            'rfm_scores_processed': rfm_scores,
-            'cached_users': cached_users
-        },
-        'status': 'completed'
+        'batch_id': batch_id,
+        'num_users': num_users,
+        'timestamp': datetime.utcnow().isoformat(),
+        'metadata': {
+            'source': 'airflow',
+            'dag_id': dag_id,
+            'run_id': run_id,
+            'metrics': {
+                'rfm_users_processed': rfm_users,
+                'arpu_users_processed': arpu_users,
+                'rfm_scores_processed': rfm_scores,
+                'cached_users': cached_users
+            }
+        }
     }
 
     logger.info(f"📨 Notification payload: {json.dumps(payload, indent=2)}")

@@ -29,14 +29,14 @@ docker compose -f compose.dev.yaml up -d
 # 4. Tunggu 2-3 menit sampai semua ready
 docker compose ps
 
-# 5. Done! Akses aplikasi
+# 5. Done! Akses aplikasik
 ```
 
 ### Access URLs
 | Service | URL | Login |
 |---------|-----|-------|
 | Frontend | http://localhost:5173 | - |
-| Backend API | http://localhost:8000/docs | - |
+| Backend API | http://localhost:8000/api/v1/docs | - |
 | Airflow | http://localhost:8080 | admin/admin |
 | MLflow | http://localhost:5000 | - |
 | Grafana | http://localhost:3000 | admin/admin |
@@ -274,7 +274,7 @@ python scripts/security_audit.py --target http://localhost:8000
 
 **After Dev Setup:**
 1. Test frontend: http://localhost:5173
-2. Test API: http://localhost:8000/docs
+2. Test API: http://localhost:8000/api/v1/docs
 3. Trigger Airflow DAG: http://localhost:8080
 4. View Grafana: http://localhost:3000
 
