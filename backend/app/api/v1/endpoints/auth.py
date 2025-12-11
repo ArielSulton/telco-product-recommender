@@ -18,6 +18,7 @@ from app.core.security import (
     decode_access_token,
     validate_phone_number,
 )
+from app.core.logging import logger
 from app.db.models.user import User
 from app.db.database import get_db_connection
 
@@ -188,6 +189,8 @@ async def register(request: RegisterRequest):
                 "role": user.role,
             }
         )
+
+        logger.info(f"User registered successfully: {user.id}", extra={"phone": user.phone})
 
         return AuthResponse(
             access_token=access_token,
