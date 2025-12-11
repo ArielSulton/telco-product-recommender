@@ -31,13 +31,17 @@ CMD ["npm", "run", "dev", "--", "--host"]
 # Build stage
 FROM base AS builder
 
+# Accept build args for Vite env vars
+ARG VITE_API_URL=/api/v1
+ENV VITE_API_URL=${VITE_API_URL}
+
 # Copy dependencies
 COPY --from=deps /app/node_modules ./node_modules
 
 # Copy application code
 COPY . .
 
-# Build application
+# Build application with env vars baked in
 RUN npm run build
 
 # Production stage

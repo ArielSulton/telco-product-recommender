@@ -1,6 +1,11 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+// Auto-detect API URL: build arg > production fallback > dev fallback
+const API_BASE_URL = import.meta.env.VITE_API_URL ||
+  (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? '/api/v1'  // Production: path-based routing via Traefik
+    : 'http://localhost:8000'  // Development: direct backend
+  )
 
 // Create axios instance with default config
 const api = axios.create({
