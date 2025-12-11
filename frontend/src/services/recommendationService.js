@@ -5,7 +5,7 @@ const recommendationService = {
   async getRecommendationsV2(userId, options = {}) {
     try {
       const response = await api.post(
-        '/api/v1/recommend/v2',
+        '/recommend/v2',
         {
           user_id: userId,
           k: options.limit || 5,
@@ -30,7 +30,7 @@ const recommendationService = {
   // Get personalized recommendations (legacy v1)
   async getRecommendations(userId, context = {}, limit = 5) {
     try {
-      const response = await api.post('/api/v1/recommend', {
+      const response = await api.post('/recommend', {
         user_id: userId,
         context: context,
         limit: limit,
@@ -45,7 +45,7 @@ const recommendationService = {
   // Get product details
   async getProduct(productId) {
     try {
-      const response = await api.get(`/api/v1/products/${productId}`)
+      const response = await api.get(`/products/${productId}`)
       return response.data
     } catch (error) {
       console.error('Failed to fetch product:', error)
@@ -62,7 +62,7 @@ const recommendationService = {
       if (filters.limit) params.append('limit', filters.limit)
       if (filters.offset) params.append('offset', filters.offset)
 
-      const response = await api.get(`/api/v1/products?${params.toString()}`)
+      const response = await api.get(`/products?${params.toString()}`)
       return response.data
     } catch (error) {
       console.error('Failed to fetch products:', error)

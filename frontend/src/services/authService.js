@@ -4,7 +4,7 @@ const authService = {
   // Login
   async login(phone, password) {
     try {
-      const response = await api.post('/api/v1/auth/login', {
+      const response = await api.post('/auth/login', {
         phone,
         password,
       })
@@ -23,7 +23,7 @@ const authService = {
   // Register
   async register(userData) {
     try {
-      const response = await api.post('/api/v1/auth/register', userData)
+      const response = await api.post('/auth/register', userData)
 
       // Store token and user data after successful registration
       if (response.data.access_token) {
@@ -65,7 +65,7 @@ const authService = {
   // Get user profile
   async getUserProfile() {
     try {
-      const response = await api.get('/api/v1/auth/me')
+      const response = await api.get('/auth/me')
       if (response.data.user) {
         localStorage.setItem('user', JSON.stringify(response.data.user))
         return response.data.user
@@ -79,7 +79,7 @@ const authService = {
   // Update user profile
   async updateProfile(userData) {
     try {
-      const response = await api.put('/api/v1/users/me', userData)
+      const response = await api.put('/users/me', userData)
       // Backend returns {user: {...}, message: "..."}
       if (response.data.user) {
         localStorage.setItem('user', JSON.stringify(response.data.user))

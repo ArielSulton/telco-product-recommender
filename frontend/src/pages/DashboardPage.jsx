@@ -36,7 +36,7 @@ const DashboardPage = () => {
   const fetchRecentTransactions = async () => {
     try {
       setLoadingTransactions(true)
-      const response = await api.get('/api/v1/purchases/history?limit=3')
+      const response = await api.get('/purchases/history?limit=3')
       setRecentTransactions(response.data.purchases || [])
     } catch (error) {
       console.error('Failed to fetch recent transactions:', error)
@@ -50,7 +50,7 @@ const DashboardPage = () => {
   const fetchActivePackages = async () => {
     try {
       setLoadingPackages(true)
-      const response = await api.get('/api/v1/purchases/history?limit=5')
+      const response = await api.get('/purchases/history?limit=5')
       // Filter to show only recent packages (within validity period)
       const packages = response.data.purchases || []
       setActivePackages(packages.slice(0, 3)) // Show max 3 active packages
@@ -68,7 +68,7 @@ const DashboardPage = () => {
       if (hasCheckedOnboarding) return
 
       try {
-        const response = await api.get('/api/v1/users/me')
+        const response = await api.get('/users/me')
         const hasCompletedOnboarding = response.data?.user?.has_completed_onboarding
         const userSegment = response.data?.user?.segment
 

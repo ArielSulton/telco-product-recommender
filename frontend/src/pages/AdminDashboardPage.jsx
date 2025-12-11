@@ -42,7 +42,7 @@ const AdminDashboardPage = () => {
   const fetchUserRecommendations = useCallback(async () => {
     setLoadingRecommendations(true)
     try {
-      const response = await api.get('/api/v1/admin/user-recommendations?limit=10')
+      const response = await api.get('/admin/user-recommendations?limit=10')
       setRecommendations(response.data || [])
     } catch (error) {
       console.error('Failed to fetch user recommendations:', error)
@@ -57,7 +57,7 @@ const AdminDashboardPage = () => {
     setLoading(true)
     try {
       // Fetch products
-      const productsResponse = await api.get('/api/v1/admin/products')
+      const productsResponse = await api.get('/admin/products')
       const products = productsResponse.data || []
 
       // Map to frontend format
@@ -74,7 +74,7 @@ const AdminDashboardPage = () => {
       setPackages(mappedProducts)
 
       // Fetch stats
-      const statsResponse = await api.get('/api/v1/admin/stats')
+      const statsResponse = await api.get('/admin/stats')
       setStats(statsResponse.data)
 
       // Fetch user recommendations
@@ -130,7 +130,7 @@ const AdminDashboardPage = () => {
     }
 
     try {
-      const response = await api.post('/api/v1/admin/products', {
+      const response = await api.post('/admin/products', {
         product_name: formData.name,
         product_family: 'Custom Package',
         quota_data_mb: parseInt(formData.quota),
@@ -179,7 +179,7 @@ const AdminDashboardPage = () => {
     }
 
     try {
-      const response = await api.put(`/api/v1/admin/products/${editingId}`, {
+      const response = await api.put(`/admin/products/${editingId}`, {
         product_name: formData.name,
         quota_data_mb: parseInt(formData.quota),
         price: parseInt(formData.price)
@@ -212,7 +212,7 @@ const AdminDashboardPage = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus produk ini?')) {
       try {
-        await api.delete(`/api/v1/admin/products/${id}`)
+        await api.delete(`/admin/products/${id}`)
 
         // Remove from local state
         setPackages(packages.filter(pkg => pkg.id !== id))

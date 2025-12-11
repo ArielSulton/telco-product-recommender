@@ -36,7 +36,7 @@ const CheckoutModal = ({ isOpen, onClose, product, userBalance, onSuccess }) => 
     setError(null)
 
     try {
-      const response = await api.post('/api/v1/purchases', {
+      const response = await api.post('/purchases', {
         product_id: product.product_id,
         payment_method: paymentMethod
       })

@@ -25,7 +25,7 @@ const PurchaseHistoryPage = () => {
     setError(null)
 
     try {
-      const response = await api.get('/api/v1/purchases/history?limit=50')
+      const response = await api.get('/purchases/history?limit=50')
       setPurchases(response.data.purchases || [])
       setTotalPurchases(response.data.total_purchases || 0)
       setTotalSpent(response.data.total_spent || 0)

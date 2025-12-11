@@ -71,7 +71,7 @@ const QuestionnaireModal = ({ isOpen, onClose, onComplete }) => {
   const handleSubmit = async () => {
     setLoading(true)
     try {
-      await api.post('/api/v1/users/preferences', formData)
+      await api.post('/users/preferences', formData)
       onComplete?.()
       onClose()
       toast.success('Preferensi berhasil disimpan!')

@@ -4,7 +4,7 @@ const eventService = {
   // Track event
   async trackEvent(eventData) {
     try {
-      const response = await api.post('/api/v1/events', {
+      const response = await api.post('/events', {
         user_id: eventData.userId,
         product_id: eventData.productId,
         event_type: eventData.eventType, // 'view', 'click', 'subscribe'
