@@ -136,7 +136,7 @@ services:
         - BUILD_DATE=${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
         - VCS_REF=${VCS_REF:-$(git rev-parse --short HEAD)}
         - VERSION=${VERSION:-1.0.0}
-    # container_name removed - using replicas:2 for load balancing
+    container_name: telco-backend-prod
     environment:
       - ENVIRONMENT=production
       - DATABASE_URL=postgresql+asyncpg://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/${DATABASE_NAME}
@@ -149,8 +149,13 @@ services:
       - LOG_LEVEL=INFO
       - LOG_FORMAT=json
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-    expose:
+    ports:
       - "8000"
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+      - 8.8.8.8
+      - 8.8.4.4
     depends_on:
       postgres:
         condition: service_healthy
@@ -173,7 +178,6 @@ services:
         reservations:
           cpus: '1'
           memory: 1G
-      replicas: 2
     labels:
       - "com.telco.service=backend"
       - "com.telco.version=${VERSION:-1.0.0}"
@@ -199,8 +203,13 @@ services:
     environment:
       - VITE_API_URL=https://api.paketify.my.id
       - NODE_ENV=production
-    expose:
+    ports:
       - "5173"
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+      - 8.8.8.8
+      - 8.8.4.4
     depends_on:
       - backend
     networks:
@@ -244,8 +253,13 @@ services:
       - MLFLOW_S3_ENDPOINT_URL=${MLFLOW_S3_ENDPOINT_URL:-}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
-    expose:
+    ports:
       - "5000"
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+      - 8.8.8.8
+      - 8.8.4.4
     volumes:
       - mlflow_data:/mlflow
     depends_on:
@@ -293,8 +307,13 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: telco-prometheus-prod
-    expose:
+    ports:
       - "9090"
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+      - 8.8.8.8
+      - 8.8.4.4
     volumes:
       - ./infrastructure/monitoring/prometheus:/etc/prometheus:ro
       - prometheus_data:/prometheus
@@ -346,8 +365,13 @@ services:
       - GF_SECURITY_SECRET_KEY=${GRAFANA_SECRET_KEY}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_ANALYTICS_REPORTING_ENABLED=false
-    expose:
+    ports:
       - "3030"
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+      - 8.8.8.8
+      - 8.8.4.4
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -436,8 +460,13 @@ services:
       - AIRFLOW_CONN_TELCO_POSTGRES=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/${DATABASE_NAME}
       - AIRFLOW__WEBSERVER__WEB_SERVER_URL=http://airflow-webserver:8080
       - AIRFLOW_CONN_FASTAPI_BACKEND=http://backend:8000
-    expose:
+    ports:
       - "8080"
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+      - 8.8.8.8
+      - 8.8.4.4
     volumes:
       - ./infrastructure/airflow/dags:/opt/airflow/dags:ro
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins:ro
@@ -541,8 +570,13 @@ services:
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - JUPYTER_ENABLE_LAB=yes
-    expose:
+    ports:
       - "8888"
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+      - 8.8.8.8
+      - 8.8.4.4
     volumes:
       - ./ml:/app:ro
       - mlflow_data:/mlflow:ro
