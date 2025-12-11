@@ -12,11 +12,13 @@ Usage:
 import asyncio
 from typing import Dict, Any, Optional
 import logging
+import pandas as pd
 
 from app.core.config import settings
 from app.ml.registry.mlflow_registry import MLflowRegistry, ModelLoader
 from app.ml.models.baseline.top_popular import TopPopularBaseline
 from app.ml.models.baseline.enhanced_baseline import EnhancedBaseline
+from app.db.database import get_db_connection
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +128,7 @@ async def load_production_models(
 async def _load_baseline_models() -> Dict[str, Any]:
     """
     Load baseline models as fallback when MLflow models unavailable.
+    Includes fetching data and fitting the model to ensure it's ready for inference.
 
     Returns:
         Dictionary with baseline models
@@ -145,13 +148,50 @@ async def _load_baseline_models() -> Dict[str, Any]:
             # EnhancedBaseline wraps TopPopularBaseline + adds strategies
             baseline = EnhancedBaseline()
             models['baseline'] = baseline
-            logger.info("✅ Baseline model (EnhancedBaseline) loaded")
+            logger.info("✅ Baseline model (EnhancedBaseline) initialized")
         except Exception as e:
             # Fallback to simple TopPopularBaseline if EnhancedBaseline fails
             logger.warning(f"EnhancedBaseline initialization failed, using TopPopular: {str(e)}")
             baseline = TopPopularBaseline()
             models['baseline'] = baseline
-            logger.info("✅ Baseline model (TopPopular) loaded")
+            logger.info("✅ Baseline model (TopPopular) initialized")
+
+        # Fit the baseline model with transaction data
+        if models['baseline']:
+            try:
+                # Fetch recent transactions to calculate popularity
+                conn = get_db_connection()
+                query = """
+                    SELECT user_id, product_id, transaction_date 
+                    FROM transactions 
+                    WHERE status = 'completed'
+                    ORDER BY transaction_date DESC
+                    LIMIT 10000
+                """
+                transactions_df = pd.read_sql(query, conn)
+                conn.close()
+
+                if not transactions_df.empty:
+                    # Fit the model
+                    models['baseline'].fit(transactions_df)
+                    logger.info(f"✅ Baseline model fitted with {len(transactions_df)} transactions")
+                else:
+                    logger.warning("⚠️ No transactions found to fit baseline model - cold start mode")
+                    # Force fit with empty dataframe to allow cold start (prevent 'not fitted' error)
+                    # Create dummy DF with required columns
+                    dummy_df = pd.DataFrame(columns=['user_id', 'product_id', 'transaction_date'])
+                    models['baseline'].fit(dummy_df)
+                    logger.info("✅ Baseline model force-fitted for cold start")
+            
+            except Exception as e:
+                logger.error(f"❌ Failed to fit baseline model: {str(e)}")
+                # Force fit as last resort
+                try:
+                    dummy_df = pd.DataFrame(columns=['user_id', 'product_id', 'transaction_date'])
+                    models['baseline'].fit(dummy_df)
+                    logger.info("✅ Baseline model force-fitted after DB error")
+                except:
+                    logger.error("❌ Could not force-fit baseline model")
 
     except Exception as e:
         logger.error(f"❌ Failed to load baseline model: {str(e)}")

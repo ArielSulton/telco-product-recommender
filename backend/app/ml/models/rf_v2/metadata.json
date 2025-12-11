@@ -1,0 +1,43 @@
+{
+  "model_type": "RandomForestRecommender",
+  "version": "2.0.0",
+  "created_at": "2025-12-11T21:39:18.449041",
+  "n_features": 21,
+  "n_classes": 10,
+  "temperature": 0.8,
+  "feature_columns": [
+    "plan_type_encoded",
+    "device_brand_encoded",
+    "avg_data_usage_gb",
+    "pct_video_usage",
+    "avg_call_duration",
+    "sms_freq",
+    "monthly_spend",
+    "topup_freq",
+    "travel_score",
+    "complaint_count",
+    "recency",
+    "frequency",
+    "monetary",
+    "arpu",
+    "avg_spend_per_topup",
+    "data_intensity",
+    "communication_intensity",
+    "churn_score",
+    "freq_x_monetary",
+    "arpu_per_data",
+    "loyalty_score"
+  ],
+  "target_classes": [
+    "Data Booster",
+    "Device Upgrade Offer",
+    "Family Plan Offer",
+    "General Offer",
+    "General Offer\"",
+    "Retention Offer",
+    "Roaming Pass",
+    "Streaming Partner Pack",
+    "Top-up Promo",
+    "Voice Bundle"
+  ]
+}

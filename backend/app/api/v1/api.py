@@ -13,7 +13,7 @@ Features:
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import recommendations, events, webhooks, auth, users, purchases, admin, products
+from app.api.v1.endpoints import recommendations, recommendations_v2, events, webhooks, auth, users, purchases, admin, products
 
 # Create main API router
 api_router = APIRouter()
@@ -51,6 +51,11 @@ api_router.include_router(
 api_router.include_router(
     recommendations.router,
     tags=["Recommendations"]
+)
+
+api_router.include_router(
+    recommendations_v2.router,
+    tags=["Recommendations V2 (RF Model)"]
 )
 
 api_router.include_router(

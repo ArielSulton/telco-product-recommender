@@ -13,7 +13,7 @@ Features:
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional
 from uuid import UUID, uuid4
 from collections import deque
@@ -130,6 +130,19 @@ class EventService:
         # Generate event ID
         event_id = uuid4()
 
+        # Normalize timestamps to ensure consistent timezone object
+        normalized_timestamp = timestamp
+        if timestamp is not None:
+            # If timestamp is timezone-aware but with different timezone object,
+            # convert to a consistent timezone.utc object
+            if timestamp.tzinfo is not None and hasattr(timestamp, 'astimezone'):
+                normalized_timestamp = timestamp.astimezone(timezone.utc)
+            elif timestamp.tzinfo is None:
+                # If timestamp is timezone-naive, assume it's UTC and make it timezone-aware
+                normalized_timestamp = timestamp.replace(tzinfo=timezone.utc)
+        else:
+            normalized_timestamp = datetime.now(timezone.utc)
+
         # Enrich event
         event_data = {
             'event_id': event_id,
@@ -139,8 +152,8 @@ class EventService:
             'session_id': session_id or self._generate_session_id(),
             'ab_variant': ab_variant or 'control',
             'event_metadata': metadata or {},  # Column name is 'event_metadata' in Event model
-            'timestamp': timestamp or datetime.utcnow(),
-            'created_at': datetime.utcnow()
+            'timestamp': normalized_timestamp,
+            'created_at': datetime.now(timezone.utc)
         }
 
         # Add to buffer
@@ -177,10 +190,31 @@ class EventService:
 
             # Take batch from buffer
             batch_size = min(self.batch_size, len(self.event_buffer))
-            events_to_write = [
-                self.event_buffer.popleft()
-                for _ in range(batch_size)
-            ]
+            events_to_write = []
+
+            for _ in range(batch_size):
+                event_data = self.event_buffer.popleft()
+
+                # Ensure all datetime fields are normalized to timezone-aware objects with consistent timezone
+                if 'timestamp' in event_data and event_data['timestamp'] is not None:
+                    ts = event_data['timestamp']
+                    if ts.tzinfo is not None:
+                        # Convert to UTC and strip timezone for PostgreSQL TIMESTAMP WITHOUT TIME ZONE
+                        event_data['timestamp'] = ts.astimezone(timezone.utc).replace(tzinfo=None)
+                    else:
+                        # If timezone-naive, assume it's already UTC (no timezone info needed)
+                        event_data['timestamp'] = ts
+
+                if 'created_at' in event_data and event_data['created_at'] is not None:
+                    ct = event_data['created_at']
+                    if ct.tzinfo is not None:
+                        # Convert to UTC and strip timezone for PostgreSQL TIMESTAMP WITHOUT TIME ZONE
+                        event_data['created_at'] = ct.astimezone(timezone.utc).replace(tzinfo=None)
+                    else:
+                        # If timezone-naive, assume it's already UTC (no timezone info needed)
+                        event_data['created_at'] = ct
+
+                events_to_write.append(event_data)
 
         # Write batch to database
         try:

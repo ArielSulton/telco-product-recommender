@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS events (
     user_id UUID REFERENCES users(user_id) ON DELETE CASCADE,
     product_id VARCHAR(50) REFERENCES products(product_id) ON DELETE SET NULL,
     event_type VARCHAR(20) NOT NULL,
-    ab_variant VARCHAR(10),
+    ab_variant VARCHAR(20),
     timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
     session_id VARCHAR(100),
     metadata JSONB DEFAULT '{}',

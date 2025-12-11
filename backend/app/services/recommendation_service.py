@@ -14,8 +14,8 @@ Features:
 
 import json
 import time
-from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from datetime import datetime, timedelta, timezone
+from typing import List, Dict, Optional, Any
 from uuid import UUID
 
 import pandas as pd
@@ -204,23 +204,29 @@ class RecommendationService:
             DataFrame with user features or None if not found
         """
         try:
-            # Query user from database
+            # Query user from database with features relationship
+            from sqlalchemy.orm import selectinload
             result = await db.execute(
-                select(User).where(User.user_id == user_id)
+                select(User)
+                .options(selectinload(User.features))
+                .where(User.user_id == user_id)
             )
             user = result.scalar_one_or_none()
 
             if user is None:
                 return None
 
+            # Access features via relationship (user.features)
+            features = user.features
+
             # Convert to DataFrame for pipeline
             user_data = {
                 'user_id': str(user.user_id),
-                'recency': user.recency or 30,
-                'frequency': user.frequency or 1,
-                'monetary': user.monetary or 0,
-                'arpu_bucket': user.arpu_bucket or 'medium',
-                'churn_score': user.churn_score or 0.5,
+                'recency': features.recency if features else 30,
+                'frequency': features.frequency if features else 1,
+                'monetary': float(features.monetary) if features else 0.0,
+                'arpu_bucket': features.arpu_bucket if features else 'medium',
+                'churn_score': float(features.churn_score) if features else 0.5,
                 'segment_id': user.segment_id or 0
             }
 
@@ -280,7 +286,7 @@ class RecommendationService:
         Fetch recently purchased products to avoid recommending them again.
         """
         try:
-            cutoff = datetime.utcnow() - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
             result = await db.execute(
                 select(Transaction.product_id).where(
                     Transaction.user_id == user_id,
@@ -570,20 +576,69 @@ class RecommendationService:
             return 0.0
         return self.cache_hit_count / self.request_count
 
-    def get_metrics(self) -> Dict:
-        """
-        Get service performance metrics.
+async def get_user_features(
+    db: AsyncSession,
+    user_id: UUID
+) -> Optional[Dict[str, Any]]:
+    """
+    Get user features for RF model (V2).
+    
+    Queries 'app_users' for real-time behavioral features updated by purchases.
+    Optionally merges with 'user_features' for historical engineered features.
+    """
+    try:
+        # 1. Query real-time features from app_users
+        from sqlalchemy import text
+        
+        query = text("""
+            SELECT plan_type, device_brand, avg_data_usage_gb, pct_video_usage,
+                   avg_call_duration, sms_freq, monthly_spend, topup_freq,
+                   travel_score, complaint_count
+            FROM app_users
+            WHERE id = :user_id
+        """)
+        
+        result = await db.execute(query, {"user_id": str(user_id)})
+        app_user = result.fetchone()
+        
+        # 2. Query legacy features from user_features
+        # We need to use the ORM or raw SQL. Let's use raw SQL for consistency here
+        # assuming user_id in app_users maps to user_id in user_features
+        query_legacy = text("""
+            SELECT recency, frequency, monetary, churn_score
+            FROM user_features
+            WHERE user_id = :user_id
+        """)
+        result_legacy = await db.execute(query_legacy, {"user_id": str(user_id)})
+        legacy_features = result_legacy.fetchone()
 
-        Returns:
-            dict: Service metrics
-        """
-        pipeline_metrics = self.pipeline.get_performance_metrics()
+        if app_user is None and legacy_features is None:
+            return None
 
-        return {
-            "request_count": self.request_count,
-            "cache_hit_count": self.cache_hit_count,
-            "cache_hit_rate": self._get_cache_hit_rate(),
-            "error_count": self.error_count,
-            "error_rate": self.error_count / max(self.request_count, 1),
-            "pipeline_metrics": pipeline_metrics
+        # Construct feature dict
+        # Use app_user values if available, else defaults
+        feature_dict = {
+            'plan_type': app_user.plan_type if app_user else 'Prepaid',
+            'device_brand': app_user.device_brand if app_user else 'Samsung',
+            'avg_data_usage_gb': float(app_user.avg_data_usage_gb) if app_user and app_user.avg_data_usage_gb is not None else 5.0,
+            'pct_video_usage': float(app_user.pct_video_usage) if app_user and app_user.pct_video_usage is not None else 0.4,
+            'avg_call_duration': float(app_user.avg_call_duration) if app_user and app_user.avg_call_duration is not None else 10.0,
+            'sms_freq': app_user.sms_freq if app_user and app_user.sms_freq is not None else 15,
+            'monthly_spend': app_user.monthly_spend if app_user and app_user.monthly_spend is not None else 0,
+            'topup_freq': app_user.topup_freq if app_user and app_user.topup_freq is not None else 0,
+            'travel_score': float(app_user.travel_score) if app_user and app_user.travel_score is not None else 0.3,
+            'complaint_count': app_user.complaint_count if app_user and app_user.complaint_count is not None else 0,
+            
+            # Engineered features
+            'recency': legacy_features.recency if legacy_features else 30,
+            'frequency': legacy_features.frequency if legacy_features else 0,
+            'monetary': float(legacy_features.monetary) if legacy_features else 0.0,
+            'churn_score': float(legacy_features.churn_score) if legacy_features else 0.0,
+            'loyalty_score': 0.8  # Placeholder
         }
+
+        return feature_dict
+
+    except Exception as e:
+        logger.error(f"Failed to get user features for V2: {str(e)}", exc_info=True)
+        return None

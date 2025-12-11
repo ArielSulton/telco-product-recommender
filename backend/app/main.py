@@ -86,12 +86,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         # Load ML models from MLflow
         try:
             from app.ml.registry.model_loader import load_production_models
-            models = await load_production_models(fallback_to_baseline=True)
+            models = await load_production_models(fallback_to_baseline=False)
             logger.info("✅ ML models loaded successfully")
         except Exception as e:
             logger.error(f"❌ Failed to load ML models: {str(e)}")
-            # Continue with empty models - services will use fallbacks
-            models = {'segmenter': None, 'cf_model': None, 'baseline': None, 'ranker': None}
+            # Initialize basic fallback models
+            from app.ml.models.baseline.top_popular import TopPopularBaseline
+            models = {
+                'segmenter': None,
+                'cf_model': None, 
+                'ranker': None,
+                'baseline': TopPopularBaseline()
+            }
 
         # Initialize recommendation service
         try:

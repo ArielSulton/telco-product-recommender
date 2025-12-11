@@ -103,18 +103,16 @@ class HybridPipeline:
         """
         logger.info("Initializing hybrid pipeline...")
 
-        # Check required models
+        # Check critical components
+        if self.baseline is None: # Allow baseline to be initialized even if not fitted, for fallback
+             logger.warning("Baseline model not provided. Pipeline will run in limited fallback mode.")
+
+        # Check optional components
         if self.segmenter is None or not self.segmenter.is_trained:
-            logger.error("Segmenter not initialized or trained")
-            return False
+            logger.warning("Segmenter not initialized or trained. Using default segment.")
 
         if self.ranker is None or not self.ranker.is_trained:
-            logger.error("Ranker not initialized or trained")
-            return False
-
-        if self.baseline is None or not self.baseline.is_fitted:
-            logger.error("Baseline model not initialized or fitted")
-            return False
+            logger.warning("Ranker not initialized or trained. Skipping re-ranking stage.")
 
         if self.diversifier is None:
             logger.warning("Diversifier not provided - diversity optimization disabled")
@@ -140,7 +138,7 @@ class HybridPipeline:
         Pipeline:
         1. Get user segment from K-Means
         2. Generate candidates using 4 strategies (100 items total):
-           - Collaborative Filtering (40%) - Matrix factorization
+           - Collaborative Filtering (40%) - LightFM matrix factorization
            - Content-based similarity (30%) - Cosine similarity
            - Rule-based affinity (20%) - Business rules
            - Segment popularity (10%) - Top products per segment
@@ -168,9 +166,11 @@ class HybridPipeline:
         try:
             # Stage 1: User Segmentation
             segment_id = await self._get_user_segment(user_id, user_features)
-            segment_name = self.segmenter.interpret_segments().get(
-                segment_id, f"Segment {segment_id}"
-            )
+            segment_name = "Default Segment"
+            if self.segmenter:
+                segment_name = self.segmenter.interpret_segments().get(
+                    segment_id, f"Segment {segment_id}"
+                )
 
             logger.info(f"User {user_id} → Segment {segment_id}: {segment_name}")
 
@@ -187,13 +187,19 @@ class HybridPipeline:
                     user_id, segment_id, segment_name, product_catalog, top_k
                 )
 
-            # Stage 3: Feature Engineering for Ranking
-            ranking_features = self._prepare_ranking_features(
-                user_id, user_features, candidates, product_catalog
-            )
+            # Stage 3 & 4: Re-ranking (if ranker available)
+            if self.ranker and self.ranker.is_trained:
+                # Stage 3: Feature Engineering for Ranking
+                ranking_features = self._prepare_ranking_features(
+                    user_id, user_features, candidates, product_catalog
+                )
 
-            # Stage 4: Re-ranking with XGBoost
-            ranked_candidates = self._rerank_candidates(ranking_features, candidates)
+                # Stage 4: Re-ranking with XGBoost
+                ranked_candidates = self._rerank_candidates(ranking_features, candidates)
+            else:
+                # Skip ranking
+                ranked_candidates = candidates
+                ranking_features = pd.DataFrame() # Empty for explanation generation
 
             # Stage 5: Diversification (optional)
             if self.diversifier:
@@ -252,7 +258,10 @@ class HybridPipeline:
                 return int(cached_segment)
 
         # Predict segment
-        segment_id = self.segmenter.predict(user_features)[0]
+        if self.segmenter and self.segmenter.is_trained:
+            segment_id = self.segmenter.predict(user_features)[0]
+        else:
+            segment_id = 0 # Default segment
 
         # Cache result
         if self.cache_client:

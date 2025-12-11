@@ -8,12 +8,121 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
 import uuid
+import logging
 
 from app.api.v1.endpoints.auth import get_current_user
 from app.db.models.user import User
 from app.db.database import get_db_connection
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+def infer_behavioral_features(product_name: str, product_family: str, quota_data_mb: int) -> dict:
+    """
+    Infer behavioral features from purchased product.
+
+    Maps product characteristics to user behavioral features based on
+    the 10 target classes from RF model training:
+    - Data Booster, Streaming Partner Pack, Voice Bundle, etc.
+
+    Args:
+        product_name: Product name (e.g., "Data Booster 10GB")
+        product_family: Product category (data/voice/combo/streaming)
+        quota_data_mb: Data quota in MB
+
+    Returns:
+        dict: Inferred behavioral features
+    """
+    product_lower = product_name.lower()
+    family_lower = (product_family or '').lower()
+
+    # Default values (moderate user)
+    features = {
+        'avg_data_usage_gb': 5.0,
+        'pct_video_usage': 0.4,
+        'avg_call_duration': 10.0,
+        'sms_freq': 15,
+        'travel_score': 0.3
+    }
+
+    # Inference logic based on training data distribution
+
+    # DATA BOOSTER (768 samples) - High data users
+    if 'data' in product_lower and 'boost' in product_lower:
+        features['avg_data_usage_gb'] = max(quota_data_mb * 0.75 / 1024, 8.0)  # 75% quota utilization
+        features['pct_video_usage'] = 0.5  # Moderate video
+        features['avg_call_duration'] = 8.0  # Lower voice usage
+        features['sms_freq'] = 12
+
+    # STREAMING PARTNER PACK (241 samples) - Video streamers
+    elif 'stream' in product_lower or 'video' in product_lower or 'youtube' in product_lower:
+        features['avg_data_usage_gb'] = max(quota_data_mb * 0.85 / 1024, 10.0)  # 85% utilization
+        features['pct_video_usage'] = 0.8  # Very high video usage
+        features['avg_call_duration'] = 6.0  # Lower voice
+        features['sms_freq'] = 10
+
+    # VOICE BUNDLE (64 samples) - Voice-heavy users
+    elif 'voice' in product_lower or 'call' in product_lower or 'telpon' in product_lower:
+        features['avg_data_usage_gb'] = 2.0  # Low data
+        features['pct_video_usage'] = 0.15  # Very low video
+        features['avg_call_duration'] = 18.0  # High voice usage
+        features['sms_freq'] = 20
+
+    # ROAMING PASS (88 samples) - Travelers
+    elif 'roam' in product_lower or 'travel' in product_lower:
+        features['avg_data_usage_gb'] = max(quota_data_mb * 0.6 / 1024, 5.0)
+        features['pct_video_usage'] = 0.3  # Lower due to roaming
+        features['avg_call_duration'] = 12.0
+        features['sms_freq'] = 25  # Higher SMS when traveling
+        features['travel_score'] = 0.8  # High travel score!
+
+    # FAMILY PLAN (75 samples) - Multiple users, balanced
+    elif 'family' in product_lower or 'keluarga' in product_lower:
+        features['avg_data_usage_gb'] = max(quota_data_mb * 0.7 / 1024, 15.0)  # Shared usage
+        features['pct_video_usage'] = 0.6  # Mixed usage
+        features['avg_call_duration'] = 14.0
+        features['sms_freq'] = 30  # Family communication
+
+    # DEVICE UPGRADE OFFER (1426 samples) - Premium users
+    elif 'device' in product_lower or 'upgrade' in product_lower or 'gadget' in product_lower:
+        features['avg_data_usage_gb'] = max(quota_data_mb * 0.8 / 1024, 12.0)
+        features['pct_video_usage'] = 0.65  # Higher on new devices
+        features['avg_call_duration'] = 11.0
+        features['sms_freq'] = 18
+
+    # TOP-UP PROMO (370 samples) - Budget users
+    elif 'promo' in product_lower or 'top' in product_lower or 'isi' in product_lower:
+        features['avg_data_usage_gb'] = max(quota_data_mb * 0.65 / 1024, 3.0)  # Lower utilization
+        features['pct_video_usage'] = 0.35
+        features['avg_call_duration'] = 9.0
+        features['sms_freq'] = 16
+
+    # RETENTION OFFER (725 samples) - Mixed behavior
+    elif 'retention' in product_lower or 'loyal' in product_lower:
+        features['avg_data_usage_gb'] = max(quota_data_mb * 0.7 / 1024, 6.0)
+        features['pct_video_usage'] = 0.45
+        features['avg_call_duration'] = 10.5
+        features['sms_freq'] = 14
+
+    # Fallback: Infer from product_family
+    elif family_lower:
+        if 'data' in family_lower or 'internet' in family_lower:
+            features['avg_data_usage_gb'] = max(quota_data_mb * 0.7 / 1024, 5.0)
+            features['pct_video_usage'] = 0.5
+            features['avg_call_duration'] = 7.0
+        elif 'voice' in family_lower or 'call' in family_lower:
+            features['avg_data_usage_gb'] = 1.5
+            features['pct_video_usage'] = 0.1
+            features['avg_call_duration'] = 16.0
+        elif 'combo' in family_lower or 'paket' in family_lower:
+            features['avg_data_usage_gb'] = max(quota_data_mb * 0.65 / 1024, 4.0)
+            features['pct_video_usage'] = 0.4
+            features['avg_call_duration'] = 12.0
+
+    logger.info(f"📊 Inferred features for '{product_name}': data={features['avg_data_usage_gb']:.1f}GB, video={features['pct_video_usage']:.0%}")
+
+    return features
 
 
 class PurchaseRequest(BaseModel):
@@ -82,6 +191,7 @@ async def create_purchase(
                 user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
                 product_id VARCHAR(50) NOT NULL,
                 product_name VARCHAR(255) NOT NULL,
+                product_family VARCHAR(100),
                 quota_data_mb INTEGER,
                 validity_days INTEGER,
                 price INTEGER NOT NULL,
@@ -90,6 +200,12 @@ async def create_purchase(
                 purchase_date TIMESTAMP DEFAULT NOW(),
                 created_at TIMESTAMP DEFAULT NOW()
             )
+        """)
+
+        # Add product_family column if it doesn't exist (migration-safe)
+        cursor.execute("""
+            ALTER TABLE purchases
+            ADD COLUMN IF NOT EXISTS product_family VARCHAR(100)
         """)
 
         # Create index for faster queries
@@ -101,7 +217,7 @@ async def create_purchase(
 
         # Get product details from products table
         cursor.execute("""
-            SELECT product_id, product_name, quota_data_mb, validity_days, price
+            SELECT product_id, product_name, quota_data_mb, validity_days, price, product_family
             FROM products
             WHERE product_id = %s
         """, (request.product_id,))
@@ -136,16 +252,17 @@ async def create_purchase(
         purchase_id = str(uuid.uuid4())
         cursor.execute("""
             INSERT INTO purchases (
-                id, user_id, product_id, product_name, quota_data_mb,
+                id, user_id, product_id, product_name, product_family, quota_data_mb,
                 validity_days, price, payment_method, status, purchase_date
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             RETURNING id, user_id, product_id, product_name, price, payment_method, status, purchase_date
         """, (
             purchase_id,
             current_user.id,
             product['product_id'],
             product['product_name'],
+            product.get('product_family'),  # Add family tracking
             product['quota_data_mb'],
             product['validity_days'],
             product['price'],
@@ -154,6 +271,93 @@ async def create_purchase(
         ))
 
         purchase_result = cursor.fetchone()
+
+        # Update user features for real-time recommendations
+        try:
+            # Get purchase stats for this user (last 30 days)
+            cursor.execute("""
+                SELECT
+                    COUNT(*) as purchase_count,
+                    SUM(price) as total_spent
+                FROM purchases
+                WHERE user_id = %s
+                AND purchase_date >= NOW() - INTERVAL '30 days'
+            """, (current_user.id,))
+            stats = cursor.fetchone()
+
+            purchase_count = stats['purchase_count'] if stats else 1
+            total_spent = stats['total_spent'] if stats else product['price']
+
+            # Infer behavioral features from purchased product
+            inferred_features = infer_behavioral_features(
+                product_name=product['product_name'],
+                product_family=product.get('product_family', ''),
+                quota_data_mb=product.get('quota_data_mb', 0) or 0
+            )
+
+            # Update app_users table with calculated features
+            # Add columns if they don't exist (migration-safe)
+            cursor.execute("""
+                ALTER TABLE app_users
+                ADD COLUMN IF NOT EXISTS monthly_spend INTEGER DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS topup_freq INTEGER DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS avg_data_usage_gb FLOAT DEFAULT 5.0,
+                ADD COLUMN IF NOT EXISTS pct_video_usage FLOAT DEFAULT 0.4,
+                ADD COLUMN IF NOT EXISTS avg_call_duration FLOAT DEFAULT 10.0,
+                ADD COLUMN IF NOT EXISTS sms_freq INTEGER DEFAULT 15,
+                ADD COLUMN IF NOT EXISTS travel_score FLOAT DEFAULT 0.3,
+                ADD COLUMN IF NOT EXISTS last_purchase_date TIMESTAMP,
+                ADD COLUMN IF NOT EXISTS total_purchases INTEGER DEFAULT 0
+            """)
+
+            # Update user features (financial + behavioral)
+            cursor.execute("""
+                UPDATE app_users
+                SET
+                    monthly_spend = %s,
+                    topup_freq = %s,
+                    avg_data_usage_gb = %s,
+                    pct_video_usage = %s,
+                    avg_call_duration = %s,
+                    sms_freq = %s,
+                    travel_score = %s,
+                    last_purchase_date = NOW(),
+                    total_purchases = total_purchases + 1,
+                    updated_at = NOW()
+                WHERE id = %s
+            """, (
+                total_spent,
+                purchase_count,
+                inferred_features['avg_data_usage_gb'],
+                inferred_features['pct_video_usage'],
+                inferred_features['avg_call_duration'],
+                inferred_features['sms_freq'],
+                inferred_features['travel_score'],
+                current_user.id
+            ))
+
+        except Exception as feature_error:
+            logger.warning(f"Failed to update user features: {feature_error}")
+            # Don't fail the purchase if feature update fails
+
+        # Invalidate recommendation cache
+        try:
+            from app.api.deps import RedisClient
+            redis_client = await RedisClient.get_instance()
+            if redis_client:
+                # Invalidate user recommendations cache
+                cache_keys = [
+                    f"recommendations:{current_user.id}",
+                    f"user_features:{current_user.id}",
+                    f"segment:{current_user.id}"
+                ]
+                for key in cache_keys:
+                    await redis_client.delete(key)
+                logger.info(f"✅ Invalidated cache for user {current_user.id} after purchase")
+        except Exception as cache_error:
+            logger.warning(f"Failed to invalidate cache: {cache_error}")
+            # Don't fail the purchase if cache invalidation fails
+
         conn.commit()
 
         return PurchaseResponse(

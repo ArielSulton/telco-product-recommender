@@ -268,6 +268,7 @@ async def get_current_user_profile(current_user: User = Depends(get_current_user
             result = cursor.fetchone()
             has_completed_onboarding = result['has_completed_onboarding'] if result else False
         except Exception:
+            conn.rollback()  # Rollback transaction to recover from "relation does not exist" error
             pass  # Table doesn't exist yet
 
         # Get user segment from user_features table (or users table as fallback)
@@ -282,6 +283,7 @@ async def get_current_user_profile(current_user: User = Depends(get_current_user
             if segment_result and segment_result['segment_id'] is not None:
                 segment_id = segment_result['segment_id']
         except Exception:
+            conn.rollback()  # Rollback transaction if table missing
             # user_features table might not exist, try users table
             try:
                 cursor.execute("""
@@ -293,6 +295,7 @@ async def get_current_user_profile(current_user: User = Depends(get_current_user
                 if segment_result and segment_result['segment_id'] is not None:
                     segment_id = segment_result['segment_id']
             except Exception:
+                conn.rollback()
                 pass  # Use default segment_id = 0
 
         # Get segment info

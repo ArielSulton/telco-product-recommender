@@ -89,15 +89,6 @@ logs
 # ================================
 # Machine Learning
 # ================================
-# Model artifacts
-*.pkl
-*.joblib
-*.h5
-*.hdf5
-*.onnx
-backend/app/ml/models/**/*.pkl
-backend/app/ml/models/**/*.joblib
-
 # MLflow
 mlruns/
 mlartifacts/
@@ -169,6 +160,8 @@ Desktop.ini
 .vscode/
 .claude/
 .idea/
+GEMINI.md
+QWEN.md
 CLAUDE.md
 *.swp
 *.swo

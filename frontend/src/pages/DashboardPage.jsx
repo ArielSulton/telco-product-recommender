@@ -195,7 +195,6 @@ const DashboardPage = () => {
         <div className="card mb-8 hover-lift animate-slide-up">
           <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
             Data Usage
-            <span className="block text-xs font-normal text-gray-500 mt-1">(Demo)</span>
           </h2>
 
           <div className="space-y-6">

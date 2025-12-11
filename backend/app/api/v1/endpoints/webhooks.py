@@ -16,7 +16,7 @@ Security:
 """
 
 from typing import Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Header
 from pydantic import BaseModel, Field
@@ -38,7 +38,7 @@ class FeaturesUpdatedWebhook(BaseModel):
 
     batch_id: str = Field(..., description="Feature batch identifier")
     num_users: int = Field(..., ge=1, description="Number of users updated")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: Optional[Dict] = Field(default={}, description="Additional context")
 
     class Config:
@@ -78,7 +78,7 @@ class ModelDeployedWebhook(BaseModel):
     model_name: str = Field(..., description="Model name")
     version: str = Field(..., description="Model version")
     registry_uri: str = Field(..., description="MLflow registry URI")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: Optional[Dict] = Field(default={}, description="Model metadata")
 
 
@@ -89,7 +89,7 @@ class BatchCompleteWebhook(BaseModel):
     job_type: str = Field(..., description="Job type")
     status: str = Field(..., description="Job status: success, failed")
     records_processed: int = Field(..., ge=0)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: Optional[Dict] = Field(default={})
 
     class Config:
@@ -199,7 +199,7 @@ async def features_updated_webhook(
             "message": "Feature update processed",
             "batch_id": payload.batch_id,
             "invalidated_caches": invalidated_count,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     except Exception as e:
@@ -299,7 +299,7 @@ async def model_deployed_webhook(
             "model_name": payload.model_name,
             "version": payload.version,
             "reload_required": True,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     except Exception as e:
@@ -398,7 +398,7 @@ async def batch_complete_webhook(
             "status": "success",
             "message": "Batch completion acknowledged",
             "job_id": payload.job_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     except Exception as e:
