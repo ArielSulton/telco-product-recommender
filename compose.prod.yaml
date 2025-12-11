@@ -136,7 +136,7 @@ services:
         - BUILD_DATE=${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
         - VCS_REF=${VCS_REF:-$(git rev-parse --short HEAD)}
         - VERSION=${VERSION:-1.0.0}
-    container_name: telco-backend-prod
+    # container_name removed - using replicas:2 for load balancing
     environment:
       - ENVIRONMENT=production
       - DATABASE_URL=postgresql+asyncpg://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/${DATABASE_NAME}
