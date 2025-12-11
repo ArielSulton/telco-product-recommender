@@ -5,11 +5,13 @@ services:
   postgres:
     image: postgres:14-alpine
     container_name: telco-postgres-prod
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: ${DATABASE_USER}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
-      POSTGRES_DB: ${DATABASE_NAME}
-      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.UTF-8"
+      - POSTGRES_USER: ${DATABASE_USER}
+      - POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      - POSTGRES_DB: ${DATABASE_NAME}
+      - POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.UTF-8"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -49,6 +51,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: telco-redis-prod
+    env_file:
+      - .env
     command: >
       redis-server
       --appendonly yes
@@ -81,6 +85,8 @@ services:
     build:
       context: ./services/data-simulator
     container_name: telco-data-simulator-prod
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/${DATABASE_NAME}
       - DATA_SOURCE_PATH=/app/ml/data/raw/ac-01_telco_customer_behavior_mock_data.csv
@@ -281,6 +287,8 @@ services:
     build:
       context: ./infrastructure/mlflow
     container_name: telco-mlflow-prod
+    env_file:
+      - .env
     environment:
       - BACKEND_STORE_URI=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/mlflow
       - ARTIFACT_ROOT=/mlflow/artifacts
@@ -391,6 +399,8 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: telco-grafana-prod
+    env_file:
+      - .env
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
@@ -448,6 +458,8 @@ services:
     build:
       context: ./infrastructure/airflow
     container_name: telco-airflow-init-prod
+    env_file:
+      - .env
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/airflow
@@ -489,6 +501,8 @@ services:
     build:
       context: ./infrastructure/airflow
     container_name: telco-airflow-webserver-prod
+    env_file:
+      - .env
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/airflow
@@ -554,6 +568,8 @@ services:
     build:
       context: ./infrastructure/airflow
     container_name: telco-airflow-scheduler-prod
+    env_file:
+      - .env
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/airflow
@@ -607,6 +623,8 @@ services:
       dockerfile: Dockerfile
       target: training
     container_name: telco-ml-prod
+    env_file:
+      - .env
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - JUPYTER_ENABLE_LAB=yes
