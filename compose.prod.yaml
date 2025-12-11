@@ -186,8 +186,6 @@ services:
       - "traefik.http.routers.paketify-backend.entrypoints=websecure"
       - "traefik.http.routers.paketify-backend.tls.certResolver=letsencrypt"
       - "traefik.http.routers.paketify-backend.priority=100"
-      - "traefik.http.routers.paketify-backend.middlewares=paketify-strip-api"
-      - "traefik.http.middlewares.paketify-strip-api.stripprefix.prefixes=/api"
       - "traefik.http.routers.paketify-backend.service=paketify-backend"
       - "traefik.http.services.paketify-backend.loadbalancer.server.port=8000"
       - "traefik.docker.network=dokploy-network"
