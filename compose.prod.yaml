@@ -456,7 +456,8 @@ services:
   # Apache Airflow Init
   airflow-init:
     build:
-      context: ./infrastructure/airflow
+      context: .
+      dockerfile: ./infrastructure/airflow/Dockerfile
     container_name: telco-airflow-init-prod
     env_file:
       - .env
@@ -494,7 +495,8 @@ services:
   # Airflow Webserver
   airflow-webserver:
     build:
-      context: ./infrastructure/airflow
+      context: .
+      dockerfile: ./infrastructure/airflow/Dockerfile
     container_name: telco-airflow-webserver-prod
     env_file:
       - .env
@@ -556,7 +558,8 @@ services:
   # Airflow Scheduler
   airflow-scheduler:
     build:
-      context: ./infrastructure/airflow
+      context: .
+      dockerfile: ./infrastructure/airflow/Dockerfile
     container_name: telco-airflow-scheduler-prod
     env_file:
       - .env
