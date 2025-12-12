@@ -471,11 +471,6 @@ services:
       - AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_ADMIN_PASSWORD}
       - AIRFLOW_ADMIN_EMAIL=${AIRFLOW_ADMIN_EMAIL}
     volumes:
-      - ./infrastructure/airflow/dags:/opt/airflow/dags:ro
-      - ./infrastructure/airflow/plugins:/opt/airflow/plugins:ro
-      - ./backend:/opt/airflow/backend:ro
-      - ./services:/opt/airflow/services:ro
-      - ./ml/data:/opt/airflow/ml/data:ro
       - airflow_logs:/opt/airflow/logs
       - mlflow_data:/mlflow:ro
     depends_on:
@@ -522,11 +517,6 @@ services:
       - 8.8.8.8
       - 8.8.4.4
     volumes:
-      - ./infrastructure/airflow/dags:/opt/airflow/dags:ro
-      - ./infrastructure/airflow/plugins:/opt/airflow/plugins:ro
-      - ./backend:/opt/airflow/backend:ro
-      - ./services:/opt/airflow/services:ro
-      - ./ml/data:/opt/airflow/ml/data:ro
       - airflow_logs:/opt/airflow/logs
       - mlflow_data:/mlflow:ro
     depends_on:
