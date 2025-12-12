@@ -174,7 +174,7 @@ async def get_admin_stats(
         # Average data usage (from user_features table)
         cursor.execute("""
             SELECT
-                COALESCE(AVG(usage_7d_data_mb), 0) / 1024.0 as avg_usage_gb
+                COALESCE(AVG(usage_7d_mb), 0) / 1024.0 as avg_usage_gb
             FROM user_features
         """)
         usage_stats = cursor.fetchone()
