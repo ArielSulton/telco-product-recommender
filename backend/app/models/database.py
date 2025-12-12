@@ -36,7 +36,57 @@ from app.db.session import Base
 
 
 # ==============================================
-# CORE MODELS
+# AUTHENTICATION MODELS
+# ==============================================
+
+class AppUser(Base):
+    """
+    AppUser model - Application authentication.
+
+    Attributes:
+        id: Primary key (UUID)
+        phone: Phone number (unique)
+        password_hash: Bcrypt hashed password
+        name: User display name
+        role: User role (user, admin)
+        balance: User balance in IDR
+        created_at: Record creation timestamp
+        updated_at: Record update timestamp
+    """
+
+    __tablename__ = "app_users"
+
+    id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4
+    )
+    phone: Mapped[str] = mapped_column(String(15), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    role: Mapped[str] = mapped_column(String(20), default="user", nullable=False)
+    balance: Mapped[int] = mapped_column(Integer, default=100000, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=func.now(),
+        onupdate=func.now()
+    )
+
+    # Constraints
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('user', 'admin')",
+            name="check_app_user_role"
+        ),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AppUser(phone={self.phone}, name={self.name}, role={self.role})>"
+
+
+# ==============================================
+# ML DATA MODELS
 # ==============================================
 
 class User(Base):
