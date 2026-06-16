@@ -298,13 +298,19 @@ class HybridPipeline:
         Returns:
             List of (product_id, score) tuples
         """
+        available_product_ids = set(product_catalog.get('product_id', pd.Series(dtype=str)).astype(str))
+
         # Check cache
         cache_key = f"candidates:{user_id}:{pool_size}"
         if self.cache_client:
             cached_candidates = await self.cache_client.get(cache_key)
             if cached_candidates is not None:
                 import json
-                return json.loads(cached_candidates)
+                return [
+                    (str(product_id), score)
+                    for product_id, score in json.loads(cached_candidates)
+                    if str(product_id) in available_product_ids
+                ]
 
         # Convert user_features DataFrame to dict
         user_features_dict = user_features.iloc[0].to_dict()
@@ -402,6 +408,16 @@ class HybridPipeline:
         product_scores = {}
 
         for product_id, score in all_candidates:
+            product_id = str(product_id)
+            if product_id not in available_product_ids:
+                continue
+
+            score = score + self._score_admin_metadata_candidate(
+                product_id=product_id,
+                product_catalog=product_catalog,
+                user_features=user_features_dict,
+            )
+
             if product_id in product_scores:
                 # Average scores if product appears in multiple strategies
                 product_scores[product_id] = (product_scores[product_id] + score) / 2
@@ -432,6 +448,79 @@ class HybridPipeline:
             )
 
         return candidates
+
+    def _score_admin_metadata_candidate(
+        self,
+        product_id: str,
+        product_catalog: pd.DataFrame,
+        user_features: Dict,
+    ) -> float:
+        """Small ranking boost from admin product metadata and user profile."""
+        product_rows = product_catalog[product_catalog['product_id'].astype(str) == product_id]
+        if product_rows.empty:
+            return 0.0
+
+        product = product_rows.iloc[0]
+        category = str(product.get('kategori_rekomendasi', '') or '').lower()
+        family = str(product.get('product_family', '') or '').lower()
+        tags = self._normalize_product_tags(product.get('tags', []))
+        price = float(product.get('price', 0) or 0)
+        quota_data_mb = float(product.get('quota_data_mb', 0) or 0)
+        validity_days = float(product.get('validity_days', 30) or 30)
+
+        arpu = float(user_features.get('arpu') or user_features.get('monetary') or 0)
+        usage_data = float(
+            user_features.get('usage_7d_data_mb')
+            or user_features.get('usage_7d_mb')
+            or user_features.get('usage_30d_mb')
+            or 0
+        )
+        churn_score = float(user_features.get('churn_score', 0.5) or 0)
+        frequency = float(user_features.get('frequency', 1) or 1)
+
+        boost = 0.0
+
+        if arpu > 200000:
+            boost += self._metadata_match_boost(category, tags, ['premium'], ['premium', 'unlimited'])
+        elif usage_data > 50000:
+            boost += self._metadata_match_boost(category, tags, ['data'], ['data', 'booster', 'streaming'])
+        elif churn_score > 0.7:
+            boost += self._metadata_match_boost(category, tags, ['retention'], ['retention', 'loyalty', 'promo'])
+        elif frequency > 10:
+            boost += self._metadata_match_boost(category, tags, ['combo'], ['loyalty', 'value', 'family'])
+            if family == 'combo':
+                boost += 0.04
+        else:
+            boost += self._metadata_match_boost(category, tags, ['starter', 'data'], ['starter', 'budget', 'value'])
+
+        if arpu > 0:
+            budget_gap = abs(price - arpu)
+            boost += max(0.0, 0.08 - (budget_gap / max(arpu, 1)) * 0.04)
+
+        boost += min(quota_data_mb / 50000.0, 1.0) * 0.04
+        boost += min(validity_days / 30.0, 2.0) * 0.02
+
+        return min(boost, 0.35)
+
+    def _metadata_match_boost(
+        self,
+        category: str,
+        tags: List[str],
+        preferred_categories: List[str],
+        preferred_tags: List[str],
+    ) -> float:
+        boost = 0.0
+        if category in preferred_categories:
+            boost += 0.12
+        boost += min(len(set(tags) & set(preferred_tags)), 3) * 0.04
+        return boost
+
+    def _normalize_product_tags(self, tags) -> List[str]:
+        if isinstance(tags, str):
+            tags = [tag.strip() for tag in tags.split(',')]
+        if not isinstance(tags, list):
+            return []
+        return [str(tag).lower() for tag in tags if tag]
 
     def _prepare_ranking_features(
         self,
@@ -506,9 +595,12 @@ class HybridPipeline:
 
         for product_id, score in recommendations:
             # Get product details
-            product = product_catalog[
+            product_rows = product_catalog[
                 product_catalog['product_id'] == product_id
-            ].iloc[0].to_dict()
+            ]
+            if product_rows.empty:
+                continue
+            product = product_rows.iloc[0].to_dict()
 
             # Get explanation (simplified - full SHAP would be more expensive)
             explanation = self._generate_explanation(product_id, ranking_features)
@@ -521,6 +613,9 @@ class HybridPipeline:
                 'quota_data_mb': int(product.get('quota_data_mb', 0)),
                 'quota_voice_min': int(product.get('quota_voice_min', 0)),
                 'validity_days': int(product.get('validity_days', 0)),
+                'kategori_rekomendasi': product.get('kategori_rekomendasi', ''),
+                'tags': product.get('tags', []),
+                'ikut_rekomendasi': bool(product.get('ikut_rekomendasi', True)),
                 'score': float(score),
                 'reason': explanation,
                 'cta_url': f"/activate/{product_id}"
@@ -586,9 +681,12 @@ class HybridPipeline:
         # Format recommendations
         recommendations = []
         for product_id in product_ids:
-            product = product_catalog[
+            product_rows = product_catalog[
                 product_catalog['product_id'] == product_id
-            ].iloc[0].to_dict()
+            ]
+            if product_rows.empty:
+                continue
+            product = product_rows.iloc[0].to_dict()
 
             recommendations.append({
                 'product_id': product_id,
@@ -596,6 +694,11 @@ class HybridPipeline:
                 'product_family': product.get('product_family', ''),
                 'price': float(product.get('price', 0)),
                 'quota_data_mb': int(product.get('quota_data_mb', 0)),
+                'quota_voice_min': int(product.get('quota_voice_min', 0)),
+                'validity_days': int(product.get('validity_days', 0)),
+                'kategori_rekomendasi': product.get('kategori_rekomendasi', ''),
+                'tags': product.get('tags', []),
+                'ikut_rekomendasi': bool(product.get('ikut_rekomendasi', True)),
                 'score': 0.5,  # Neutral score
                 'reason': "Popular in your segment",
                 'cta_url': f"/activate/{product_id}"

@@ -1,0 +1,9 @@
+{
+  "accuracy": 0.868,
+  "top3_accuracy": 0.9957,
+  "plot_dir": "C:\\Users\\HP\\Desktop\\Dicoding Asah\\CAPSTONE\\PAKETIFY\\ASAH Capstone\\ml\\models\\kaggle_rf\\evaluation_plots",
+  "classification_report_csv": "C:\\Users\\HP\\Desktop\\Dicoding Asah\\CAPSTONE\\PAKETIFY\\ASAH Capstone\\ml\\models\\kaggle_rf\\evaluation_plots\\classification_report.csv",
+  "top3_hit_matrix_csv": "C:\\Users\\HP\\Desktop\\Dicoding Asah\\CAPSTONE\\PAKETIFY\\ASAH Capstone\\ml\\models\\kaggle_rf\\evaluation_plots\\top3_hit_matrix.csv",
+  "top3_hit_total": 1403,
+  "top3_miss_total": 6
+}

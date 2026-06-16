@@ -13,7 +13,7 @@ Features:
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -161,7 +161,10 @@ class Product(Base):
         quota_voice_min: Voice quota in minutes
         quota_sms: SMS quota count
         validity_days: Package validity period
+        kategori_rekomendasi: Recommendation category for candidate filtering
         tags: Array of tags for filtering
+        ikut_rekomendasi: Whether product can be used by recommender
+        product_metadata: Additional display or business metadata
         is_active: Product availability status
         created_at: Record creation timestamp
         updated_at: Record update timestamp
@@ -177,7 +180,10 @@ class Product(Base):
     quota_voice_min: Mapped[int] = mapped_column(Integer, default=0)
     quota_sms: Mapped[int] = mapped_column(Integer, default=0)
     validity_days: Mapped[int] = mapped_column(Integer, default=30)
+    kategori_rekomendasi: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     tags: Mapped[Optional[List[str]]] = mapped_column(ARRAY(Text), nullable=True)
+    ikut_rekomendasi: Mapped[bool] = mapped_column(Boolean, default=True)
+    product_metadata: Mapped[Dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

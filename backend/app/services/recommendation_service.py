@@ -27,6 +27,7 @@ from app.core.config import settings
 from app.core.logging import logger
 from app.models.database import User, Product, Transaction
 from app.ml.pipeline.hybrid_pipeline import HybridPipeline, RecommendationResult
+from app.services.cache_invalidation import invalidate_user_recommendation_cache
 
 
 class RecommendationService:
@@ -252,7 +253,10 @@ class RecommendationService:
         try:
             # Query active products
             result = await db.execute(
-                select(Product).where(Product.is_active == True)
+                select(Product).where(
+                    Product.is_active == True,
+                    Product.ikut_rekomendasi == True
+                )
             )
             products = result.scalars().all()
 
@@ -266,7 +270,11 @@ class RecommendationService:
                     'price': product.price,
                     'quota_data_mb': product.quota_data_mb,
                     'quota_voice_min': product.quota_voice_min,
-                    'validity_days': product.validity_days
+                    'quota_sms': product.quota_sms,
+                    'validity_days': product.validity_days,
+                    'kategori_rekomendasi': product.kategori_rekomendasi or '',
+                    'tags': product.tags or [],
+                    'ikut_rekomendasi': product.ikut_rekomendasi
                 })
 
             return pd.DataFrame(product_data)
@@ -286,7 +294,7 @@ class RecommendationService:
         Fetch recently purchased products to avoid recommending them again.
         """
         try:
-            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+            cutoff = datetime.utcnow() - timedelta(days=days)
             result = await db.execute(
                 select(Transaction.product_id).where(
                     Transaction.user_id == user_id,
@@ -525,6 +533,10 @@ class RecommendationService:
                     'price': float(product['price']),
                     'quota_data_mb': int(product['quota_data_mb']),
                     'quota_voice_min': int(product['quota_voice_min']),
+                    'validity_days': int(product['validity_days']),
+                    'kategori_rekomendasi': product.get('kategori_rekomendasi', ''),
+                    'tags': product.get('tags', []),
+                    'ikut_rekomendasi': bool(product.get('ikut_rekomendasi', True)),
                     'score': 0.5,
                     'reason': "Mirip dengan paket terakhir kamu" if last_purchase else "Popular product",
                     'cta_url': f"/activate/{product['product_id']}"
@@ -556,13 +568,12 @@ class RecommendationService:
             bool: Success status
         """
         try:
-            # Delete all cached recommendation variants
-            pattern = f"recommendations:{user_id}:*"
-            keys = await self.redis.keys(pattern)
-
-            if keys:
-                await self.redis.delete(*keys)
-                logger.info(f"Invalidated {len(keys)} cache entries for user {user_id}")
+            deleted_count = await invalidate_user_recommendation_cache(
+                self.redis,
+                user_id,
+            )
+            if deleted_count:
+                logger.info(f"Invalidated {deleted_count} cache entries for user {user_id}")
 
             return True
 
@@ -581,15 +592,14 @@ async def get_user_features(
     user_id: UUID
 ) -> Optional[Dict[str, Any]]:
     """
-    Get user features for RF model (V2).
+    Mengambil fitur pengguna untuk model Random Forest (V2).
     
-    Queries 'app_users' for real-time behavioral features updated by purchases.
-    Optionally merges with 'user_features' for historical engineered features.
+    Query dari tabel app_users untuk fitur perilaku real-time
+    yang diperbarui setiap kali pengguna melakukan pembelian.
     """
     try:
-        # 1. Query real-time features from app_users
         from sqlalchemy import text
-        
+
         query = text("""
             SELECT plan_type, device_brand, avg_data_usage_gb, pct_video_usage,
                    avg_call_duration, sms_freq, monthly_spend, topup_freq,
@@ -601,9 +611,6 @@ async def get_user_features(
         result = await db.execute(query, {"user_id": str(user_id)})
         app_user = result.fetchone()
         
-        # 2. Query legacy features from user_features
-        # We need to use the ORM or raw SQL. Let's use raw SQL for consistency here
-        # assuming user_id in app_users maps to user_id in user_features
         query_legacy = text("""
             SELECT recency, frequency, monetary, churn_score
             FROM user_features
@@ -615,6 +622,29 @@ async def get_user_features(
         if app_user is None and legacy_features is None:
             return None
 
+        latest_purchase = None
+        try:
+            latest_result = await db.execute(text("""
+                SELECT p.product_id, pr.kategori_rekomendasi, p.purchase_date
+                FROM purchases p
+                LEFT JOIN products pr ON pr.product_id = p.product_id
+                WHERE p.user_id = :user_id
+                  AND p.status = 'completed'
+                  AND p.purchase_date >= NOW() - INTERVAL '90 days'
+                ORDER BY p.purchase_date DESC
+                LIMIT 1
+            """), {"user_id": str(user_id)})
+            latest_purchase = latest_result.fetchone()
+        except Exception as purchase_error:
+            logger.warning(f"Failed to load latest purchase context for {user_id}: {purchase_error}")
+
+        monthly_spend_idr = float(app_user.monthly_spend) if app_user and app_user.monthly_spend is not None else 0.0
+        model_monthly_spend = (
+            min(monthly_spend_idr / 1000.0, 120.0)
+            if monthly_spend_idr > 1000
+            else monthly_spend_idr
+        )
+
         # Construct feature dict
         # Use app_user values if available, else defaults
         feature_dict = {
@@ -624,7 +654,9 @@ async def get_user_features(
             'pct_video_usage': float(app_user.pct_video_usage) if app_user and app_user.pct_video_usage is not None else 0.4,
             'avg_call_duration': float(app_user.avg_call_duration) if app_user and app_user.avg_call_duration is not None else 10.0,
             'sms_freq': app_user.sms_freq if app_user and app_user.sms_freq is not None else 15,
-            'monthly_spend': app_user.monthly_spend if app_user and app_user.monthly_spend is not None else 0,
+            # Model dilatih pada skala monthly charges, sedangkan transaksi tersimpan dalam rupiah.
+            'monthly_spend': model_monthly_spend,
+            'monthly_budget_idr': monthly_spend_idr,
             'topup_freq': app_user.topup_freq if app_user and app_user.topup_freq is not None else 0,
             'travel_score': float(app_user.travel_score) if app_user and app_user.travel_score is not None else 0.3,
             'complaint_count': app_user.complaint_count if app_user and app_user.complaint_count is not None else 0,
@@ -634,7 +666,9 @@ async def get_user_features(
             'frequency': legacy_features.frequency if legacy_features else 0,
             'monetary': float(legacy_features.monetary) if legacy_features else 0.0,
             'churn_score': float(legacy_features.churn_score) if legacy_features else 0.0,
-            'loyalty_score': 0.8  # Placeholder
+            'loyalty_score': 0.8,  # Placeholder
+            'latest_product_id': latest_purchase.product_id if latest_purchase else None,
+            'latest_recommendation_category': latest_purchase.kategori_rekomendasi if latest_purchase else None,
         }
 
         return feature_dict

@@ -189,6 +189,14 @@ class EnhancedBaseline:
             if catalog.empty:
                 return []
 
+            scored_products = []
+            for _, product in catalog.iterrows():
+                score = self._score_affinity_product(product, user_features)
+                scored_products.append((product['product_id'], score))
+
+            scored_products.sort(key=lambda item: item[1], reverse=True)
+            return scored_products[:top_k]
+
             # Extract user features
             arpu = user_features.get('arpu', 0)
             usage_data = user_features.get('usage_7d_data_mb', 0)
@@ -251,6 +259,77 @@ class EnhancedBaseline:
         except Exception as e:
             logger.error(f"Affinity recommendation failed: {str(e)}")
             return []
+
+    def _score_affinity_product(self, product: pd.Series, user_features: Dict) -> float:
+        """Score product affinity using admin metadata plus product and user features."""
+        arpu = float(user_features.get('arpu') or user_features.get('monetary') or 0)
+        usage_data = float(
+            user_features.get('usage_7d_data_mb')
+            or user_features.get('usage_7d_mb')
+            or user_features.get('usage_30d_mb')
+            or 0
+        )
+        churn_score = float(user_features.get('churn_score', 0.5) or 0)
+        frequency = float(user_features.get('frequency', 1) or 1)
+
+        price = float(product.get('price', 0) or 0)
+        quota_data_mb = float(product.get('quota_data_mb', 0) or 0)
+        validity_days = float(product.get('validity_days', 30) or 30)
+        family = str(product.get('product_family', '') or '').lower()
+        category = str(product.get('kategori_rekomendasi', '') or '').lower()
+        tags = self._normalize_tags(product.get('tags', []))
+
+        score = 0.5
+        score += min(quota_data_mb / max(price, 1), 2.0) * 0.12
+        score += min(validity_days / 30.0, 2.0) * 0.08
+
+        if arpu > 0:
+            budget_gap = abs(price - arpu)
+            score += max(0.0, 0.35 - (budget_gap / max(arpu, 1)) * 0.2)
+
+        if arpu > 200000:
+            score += self._metadata_match_score(category, tags, ['premium'], ['premium', 'unlimited'])
+            if price >= 100000:
+                score += 0.18
+
+        if usage_data > 50000:
+            score += self._metadata_match_score(category, tags, ['data'], ['data', 'booster', 'streaming'])
+            score += min(quota_data_mb / 50000.0, 1.5) * 0.18
+
+        if churn_score > 0.7:
+            score += self._metadata_match_score(category, tags, ['retention'], ['retention', 'loyalty', 'promo'])
+            if price <= max(arpu, 50000):
+                score += 0.15
+
+        if frequency > 10:
+            score += self._metadata_match_score(category, tags, ['combo'], ['loyalty', 'value', 'family'])
+            if family == 'combo':
+                score += 0.15
+
+        if not any([arpu > 200000, usage_data > 50000, churn_score > 0.7, frequency > 10]):
+            score += self._metadata_match_score(category, tags, ['starter', 'data'], ['starter', 'budget', 'value'])
+
+        return min(score, 1.0)
+
+    def _metadata_match_score(
+        self,
+        category: str,
+        tags: List[str],
+        preferred_categories: List[str],
+        preferred_tags: List[str],
+    ) -> float:
+        score = 0.0
+        if category in preferred_categories:
+            score += 0.28
+        score += min(len(set(tags) & set(preferred_tags)), 3) * 0.12
+        return score
+
+    def _normalize_tags(self, tags) -> List[str]:
+        if isinstance(tags, str):
+            tags = [tag.strip() for tag in tags.split(',')]
+        if not isinstance(tags, list):
+            return []
+        return [str(tag).lower() for tag in tags if tag]
 
     def recommend_by_similarity(
         self,

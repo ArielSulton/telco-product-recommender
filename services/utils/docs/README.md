@@ -1,38 +1,42 @@
-# Documentation Index
+# Documentation Archive
 
-Complete documentation for the Telco Product Recommender System.
+Folder ini berisi dokumentasi pendukung, arsip sprint, deployment notes, dan catatan teknis dari fase pengembangan project.
 
-## 📚 Main Documentation
+## Rujukan Utama Saat Ini
 
-### Quick Start
-- **PRODUCTION_QUICK_START.md** - 5-minute setup guide
+Untuk kondisi project terbaru, gunakan README berikut:
 
-### Operation Guides
-- **API_DOCUMENTATION.md** - Complete API reference with examples
-- **DEPLOYMENT_GUIDE.md** - Production deployment procedures
-- **MONITORING_RUNBOOK.md** - Monitoring setup and incident response
-- **TROUBLESHOOTING_GUIDE.md** - Common issues and solutions
+```text
+README.md
+backend/README.md
+frontend/README.md
+ml/README.md
+infrastructure/README.md
+```
 
-## 🚀 Sprint Documentation
+## Isi Dokumentasi
 
-Detailed implementation documentation for each sprint in `sprints/` folder:
+```text
+services/utils/docs/
+|-- deployment/       Catatan deployment dan production readiness
+|-- documentation/    Dokumentasi API, monitoring, troubleshooting, dan arsitektur
+|-- quick-start/      Panduan quick start lama
+`-- sprints/          Catatan implementasi per sprint
+```
 
-- Sprint 1: Infrastructure & streaming foundation (3 docs)
-- Sprint 2: Feature engineering & ML models (2 docs)
-- Sprint 3: Integration & ranker (3 docs)
-- Sprint 4: Automation & monitoring (1 doc)
-- Sprint 5: Production hardening (1 doc)
+## Catatan Penting
 
-## 🔧 Implementation Details
+Beberapa dokumen di folder ini masih menyebut arsitektur lama seperti:
 
-In `implementation/` folder:
-- Data simulator implementation details
+- K-Means segmentation
+- LightFM collaborative filtering
+- XGBoost ranking
+- target performa sprint awal
 
-## 🧪 Testing
+Arsitektur aktif aplikasi web saat ini menggunakan Random Forest v2 sebagai rekomendasi utama melalui:
 
-See `../tests/README.md` for testing documentation and scripts.
+```text
+POST /api/v1/recommend/v2
+```
 
----
-
-**Last Updated**: November 8, 2024
-**Status**: Production Ready
+Dokumen lama tetap disimpan sebagai arsip proses pengembangan.

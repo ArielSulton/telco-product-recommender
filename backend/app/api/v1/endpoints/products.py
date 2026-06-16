@@ -13,7 +13,7 @@ Performance Targets:
 - Cache product catalog for 5 minutes
 """
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,7 +40,10 @@ class ProductResponse(BaseModel):
     quota_voice_min: int
     quota_sms: int
     validity_days: int
+    kategori_rekomendasi: Optional[str]
     tags: Optional[List[str]]
+    ikut_rekomendasi: bool
+    product_metadata: Optional[Dict[str, Any]]
     is_active: bool
 
     class Config:
@@ -97,7 +100,10 @@ class ProductListResponse(BaseModel):
                                 "quota_voice_min": 0,
                                 "quota_sms": 0,
                                 "validity_days": 7,
+                                "kategori_rekomendasi": "data",
                                 "tags": ["data", "basic"],
+                                "ikut_rekomendasi": True,
+                                "product_metadata": {"benefit": "10GB - 7 Hari"},
                                 "is_active": True
                             }
                         ],
@@ -202,7 +208,10 @@ async def list_products(
                         "quota_voice_min": 0,
                         "quota_sms": 0,
                         "validity_days": 7,
+                        "kategori_rekomendasi": "data",
                         "tags": ["data", "basic"],
+                        "ikut_rekomendasi": True,
+                        "product_metadata": {"benefit": "10GB - 7 Hari"},
                         "is_active": True
                     }
                 }

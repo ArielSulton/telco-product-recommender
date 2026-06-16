@@ -7,15 +7,25 @@ import RecommendationWidget from '../components/RecommendationWidget'
 import ProductCard from '../components/ProductCard'
 import CheckoutModal from '../components/CheckoutModal'
 import QuestionnaireModal from '../components/QuestionnaireModal'
-import { Smartphone, Wallet, Wifi, Video, MessageCircle, Phone, Package, Calendar, Database } from 'lucide-react'
+import useRecommendations from '../hooks/useRecommendations'
+import { Smartphone, Wallet, Wifi, Video, MessageCircle, Phone, Package, Calendar, Database, Sparkles, Send } from 'lucide-react'
 import api from '../services/api'
+
+const complaintCategories = [
+  { value: 'jaringan', label: 'Jaringan' },
+  { value: 'harga_paket', label: 'Harga Paket' },
+  { value: 'kuota', label: 'Kuota' },
+  { value: 'pembelian', label: 'Pembelian' },
+  { value: 'layanan', label: 'Layanan' },
+  { value: 'lainnya', label: 'Lainnya' },
+]
 
 const DashboardPage = () => {
   const { user, refreshUser } = useAuth()
   const toast = useToast()
+  const { recommendations, loading: loadingRecommendations, metadata } = useRecommendations()
   const [showQuestionnaire, setShowQuestionnaire] = useState(false)
   const [hasCheckedOnboarding, setHasCheckedOnboarding] = useState(false)
-  const [segment, setSegment] = useState(null)
 
   // Single checkout modal state
   const [checkoutProduct, setCheckoutProduct] = useState(null)
@@ -28,6 +38,11 @@ const DashboardPage = () => {
   // Active packages state (last 3 purchased packages as "active")
   const [activePackages, setActivePackages] = useState([])
   const [loadingPackages, setLoadingPackages] = useState(true)
+  const [complaintForm, setComplaintForm] = useState({
+    category: 'jaringan',
+    message: '',
+  })
+  const [submittingComplaint, setSubmittingComplaint] = useState(false)
 
   // Key to force RecommendationWidget refresh
   const [recommendationKey, setRecommendationKey] = useState(0)
@@ -62,7 +77,7 @@ const DashboardPage = () => {
     }
   }
 
-  // Check onboarding status and fetch segment on mount
+  // Check onboarding status on mount
   useEffect(() => {
     const checkOnboardingStatus = async () => {
       if (hasCheckedOnboarding) return
@@ -70,12 +85,6 @@ const DashboardPage = () => {
       try {
         const response = await api.get('/users/me')
         const hasCompletedOnboarding = response.data?.user?.has_completed_onboarding
-        const userSegment = response.data?.user?.segment
-
-        // Store segment info
-        if (userSegment) {
-          setSegment(userSegment)
-        }
 
         // Show questionnaire if not completed
         if (!hasCompletedOnboarding) {
@@ -126,6 +135,42 @@ const DashboardPage = () => {
     handleCloseCheckout()
   }
 
+  const handleComplaintChange = (event) => {
+    const { name, value } = event.target
+    setComplaintForm(prev => ({
+      ...prev,
+      [name]: value,
+    }))
+  }
+
+  const handleSubmitComplaint = async (event) => {
+    event.preventDefault()
+
+    if (complaintForm.message.trim().length < 10) {
+      toast.error('Keluhan minimal 10 karakter')
+      return
+    }
+
+    try {
+      setSubmittingComplaint(true)
+      await api.post('/complaints', {
+        category: complaintForm.category,
+        message: complaintForm.message.trim(),
+      })
+      setComplaintForm({
+        category: 'jaringan',
+        message: '',
+      })
+      setRecommendationKey(prev => prev + 1)
+      toast.success('Keluhan berhasil dikirim')
+    } catch (error) {
+      console.error('Failed to submit complaint:', error)
+      toast.error('Gagal mengirim keluhan')
+    } finally {
+      setSubmittingComplaint(false)
+    }
+  }
+
   // Format phone number for display
   const formatPhone = (phone) => {
     if (!phone) return '-'
@@ -140,6 +185,8 @@ const DashboardPage = () => {
     sosmed: 872,
     voice: 27,
   }
+  const topRecommendation = recommendations[0]
+  const recommendationClass = topRecommendation?.predicted_label || topRecommendation?.product_name
 
   return (
     <div className="min-h-screen flex flex-col bg-cyan-50">
@@ -173,23 +220,29 @@ const DashboardPage = () => {
           </div>
         </div>
 
-        {/* User Segment Card */}
-        {segment && (
-          <div className={`card mb-8 hover-lift animate-slide-up bg-gradient-to-r from-${segment.color}-50 to-${segment.color}-100 border-2 border-${segment.color}-300`}>
+        {/* RF Recommendation Profile Card */}
+        <div className="card mb-8 hover-lift animate-slide-up bg-gradient-to-r from-green-50 to-cyan-50 border-2 border-green-200">
             <div className="flex items-center gap-4">
-              <div className="text-6xl">{segment.icon}</div>
+              <div className="p-4 bg-green-600 rounded-full">
+                <Sparkles className="w-8 h-8 text-white" />
+              </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
-                  <h3 className="text-2xl font-bold text-gray-900">{segment.name}</h3>
-                  <span className={`px-3 py-1 rounded-full text-sm font-semibold bg-${segment.color}-200 text-${segment.color}-800`}>
-                    Segment ID: {segment.segment_id}
+                  <h3 className="text-2xl font-bold text-gray-900">
+                    {loadingRecommendations ? 'Menyiapkan rekomendasi...' : recommendationClass || 'Profil Rekomendasi'}
+                  </h3>
+                  <span className="px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-800">
+                    {metadata?.model_version === 'rf_v2' ? 'Random Forest v2' : 'Rekomendasi Personal'}
                   </span>
                 </div>
-                <p className="text-gray-700 text-lg">{segment.description}</p>
+                <p className="text-gray-700 text-lg">
+                  {topRecommendation
+                    ? `Pilihan utama Anda: ${topRecommendation.product_name}, berdasarkan pola penggunaan dan preferensi layanan.`
+                    : 'Rekomendasi dipersonalisasi berdasarkan perilaku penggunaan dan preferensi layanan Anda.'}
+                </p>
               </div>
             </div>
-          </div>
-        )}
+        </div>
 
         {/* Data Usage Card (Mock Data - requires real telco tracking) */}
         <div className="card mb-8 hover-lift animate-slide-up">
@@ -355,7 +408,57 @@ const DashboardPage = () => {
           title="Recommended"
           limit={3}
           onBuyClick={handleOpenCheckout}
+          keyPrefix="rec"
         />
+
+        {/* Complaint Form */}
+        <section className="mt-12">
+          <div className="card hover-lift animate-slide-up">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+              <MessageCircle className="w-7 h-7 inline-block mr-2 text-cyan-600" />
+              Kirim Keluhan
+            </h2>
+
+            <form onSubmit={handleSubmitComplaint} className="space-y-4">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2">Kategori</label>
+                <select
+                  name="category"
+                  value={complaintForm.category}
+                  onChange={handleComplaintChange}
+                  className="input-field"
+                >
+                  {complaintCategories.map(category => (
+                    <option key={category.value} value={category.value}>
+                      {category.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2">Keluhan</label>
+                <textarea
+                  name="message"
+                  value={complaintForm.message}
+                  onChange={handleComplaintChange}
+                  className="input-field min-h-28 resize-y"
+                  placeholder="Tuliskan kendala layanan yang Anda alami"
+                  maxLength={1000}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={submittingComplaint}
+                className="btn-primary inline-flex items-center gap-2 active-press disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Send className="w-5 h-5" />
+                {submittingComplaint ? 'Mengirim...' : 'Kirim Keluhan'}
+              </button>
+            </form>
+          </div>
+        </section>
 
         {/* Recent Transactions */}
         <section className="mt-12">
@@ -376,7 +479,7 @@ const DashboardPage = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {recentTransactions.map((transaction, index) => (
                 <ProductCard
-                  key={transaction.purchase_id || `${transaction.product_id}-${index}`}
+                  key={transaction.purchase_id ? `txn-${transaction.purchase_id}` : `txn-${transaction.product_id}-${index}`}
                   product={{
                     product_id: transaction.product_id,
                     product_name: transaction.product_name,

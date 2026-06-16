@@ -122,7 +122,10 @@ class ProductBase(BaseSchema):
     quota_voice_min: int = Field(default=0, ge=0)
     quota_sms: int = Field(default=0, ge=0)
     validity_days: int = Field(default=30, gt=0)
+    kategori_rekomendasi: Optional[str] = Field(None, max_length=50)
     tags: Optional[List[str]] = Field(default=None)
+    ikut_rekomendasi: bool = Field(default=True)
+    product_metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ProductCreate(ProductBase):
@@ -136,6 +139,10 @@ class ProductUpdate(BaseSchema):
 
     product_name: Optional[str] = Field(None, min_length=1, max_length=200)
     price: Optional[float] = Field(None, ge=0)
+    kategori_rekomendasi: Optional[str] = Field(None, max_length=50)
+    tags: Optional[List[str]] = None
+    ikut_rekomendasi: Optional[bool] = None
+    product_metadata: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
 
 
@@ -158,7 +165,10 @@ class Product(ProductBase):
                 "quota_voice_min": 0,
                 "quota_sms": 0,
                 "validity_days": 30,
+                "kategori_rekomendasi": "data",
                 "tags": ["data-only", "youth"],
+                "ikut_rekomendasi": True,
+                "product_metadata": {"benefit": "10GB - 30 Hari"},
                 "is_active": True,
                 "created_at": "2024-01-01T00:00:00",
                 "updated_at": "2024-01-01T00:00:00"

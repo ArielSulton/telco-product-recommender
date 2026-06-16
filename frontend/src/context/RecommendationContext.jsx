@@ -36,7 +36,10 @@ export const RecommendationProvider = ({ children }) => {
           })
 
           // V2 response structure
-          setRecommendations(data.recommendations || [])
+          const uniqueRecommendationsV2 = Array.from(new Map(
+            (data.recommendations || []).map(product => [product.product_id, product])
+          ).values());
+          setRecommendations(uniqueRecommendationsV2);
           setVariant(data.ab_variant || null)
           setMetadata({
             model_version: data.model_version,
@@ -61,7 +64,10 @@ export const RecommendationProvider = ({ children }) => {
           )
 
           // V1 response structure (direct array)
-          setRecommendations(data.recommendations || data || [])
+          const uniqueRecommendationsV1 = Array.from(new Map(
+            (data.recommendations || data || []).map(product => [product.product_id, product])
+          ).values());
+          setRecommendations(uniqueRecommendationsV1);
           setVariant('legacy_fallback')
           setMetadata({
             model_version: 'hybrid_v1',

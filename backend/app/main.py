@@ -20,7 +20,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
+# from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import Counter, Histogram, make_asgi_app
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -182,7 +182,7 @@ app.add_middleware(
 )
 
 # GZip compression for responses
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+# app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 @app.middleware("http")

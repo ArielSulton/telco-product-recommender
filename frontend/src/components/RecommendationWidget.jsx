@@ -5,7 +5,7 @@ import SkeletonCard from './SkeletonCard'
 import EmptyState from './EmptyState'
 import useRecommendations from '../hooks/useRecommendations'
 
-const RecommendationWidget = ({ title = 'Recommended for You', limit = 3, onBuyClick }) => {
+const RecommendationWidget = ({ title = 'Recommended for You', limit = 3, onBuyClick, keyPrefix = 'rec' }) => {
   const navigate = useNavigate()
   const { recommendations, loading, error, variant, fetchRecommendations } =
     useRecommendations()
@@ -62,7 +62,7 @@ const RecommendationWidget = ({ title = 'Recommended for You', limit = 3, onBuyC
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {recommendations.slice(0, limit).map((product) => (
           <ProductCard
-            key={product.product_id}
+            key={`${keyPrefix}-${product.product_id}`}
             product={product}
             variant={variant}
             showReason={true}

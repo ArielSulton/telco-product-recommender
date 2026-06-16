@@ -1,69 +1,93 @@
-# Paketify Frontend
+# Frontend - Paketify Web App
 
-React-based user interface for the Telco Product Recommendation System.
+Frontend ini adalah aplikasi React + Vite untuk pengguna dan admin Paketify.
 
-## Technology Stack
+## Stack
 
-- **Framework**: React 18
-- **Build Tool**: Vite
-- **Styling**: Tailwind CSS
-- **Routing**: React Router v6
-- **HTTP Client**: Axios
-- **State Management**: Context API
+- React 18
+- Vite
+- Tailwind CSS
+- React Router
+- Axios
+- Context API
+- Lucide React icons
 
-## Features
+## Fitur Pengguna
 
-### User Authentication
-- Login/Register forms
-- Protected routes
-- Session management
-- Profile management
+- Register dan login.
+- Onboarding preferensi rekomendasi.
+- Dashboard pengguna.
+- Kartu profil rekomendasi Random Forest v2.
+- Rekomendasi paket personal.
+- Daftar paket aktif.
+- Riwayat transaksi.
+- Pembelian paket.
+- Form keluhan pengguna.
 
-### Product Browsing
-- Product catalog with filtering
-- Product detail pages
-- Category-based navigation
+## Fitur Admin
 
-### Personalized Recommendations
-- AI-powered product recommendations
-- Real-time event tracking
-- A/B testing support
-- Usage-based suggestions
+- Dashboard admin.
+- Melihat ringkasan produk dan rekomendasi pengguna.
+- Menambah, mengedit, dan menghapus produk.
+- Mengelola metadata produk:
+  - kategori rekomendasi
+  - tags
+  - ikut rekomendasi
+- Melihat keluhan pengguna.
+- Mengubah status keluhan menjadi `reviewed` atau `resolved`.
+- Melihat informasi model Random Forest v2.
 
-### User Dashboard
-- Data usage monitoring
-- Recent transactions
-- Personalized recommendations
-- Account balance display
+## Menjalankan Frontend
 
-## Getting Started
+Dari root project dengan Docker:
 
-### Installation
-
-1. Install dependencies:
 ```bash
+docker compose -f compose.dev.yaml up -d frontend
+```
+
+Atau lokal:
+
+```bash
+cd frontend
 npm install
+npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
-2. Create environment file:
-```bash
-cp .env.example .env
+Buka:
+
+```text
+http://localhost:5173
 ```
 
-3. Start development server:
+## Build
+
 ```bash
-npm run dev
-```
-
-The application will be available at `http://localhost:5173`
-
-### Build
-
-Create a production build:
-```bash
+cd frontend
 npm run build
 ```
 
-## License
+## Environment
 
-© 2025 Paketify by Team A25-CS007. All rights reserved.
+Frontend development memakai:
+
+```text
+VITE_API_URL=http://localhost:8000/api/v1
+```
+
+## File Penting
+
+```text
+src/pages/DashboardPage.jsx
+src/pages/AdminDashboardPage.jsx
+src/pages/ProductsPage.jsx
+src/pages/AboutPage.jsx
+src/components/RecommendationWidget.jsx
+src/components/ProductCard.jsx
+src/context/RecommendationContext.jsx
+src/services/api.js
+src/services/recommendationService.js
+```
+
+## Catatan
+
+Tampilan dashboard saat ini sudah disesuaikan dengan model Random Forest v2. Istilah lama seperti K-Means segmentation, LightFM, dan XGBoost tidak dipakai sebagai informasi model utama di UI aktif.

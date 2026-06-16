@@ -1,10 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 const LoginPage = () => {
   const navigate = useNavigate()
-  const { login } = useAuth()
+  const { login, isAuthenticated, user } = useAuth()
 
   const [formData, setFormData] = useState({
     phone: '',
@@ -12,6 +12,17 @@ const LoginPage = () => {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Redirect user if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      if (user && user.role === 'admin') {
+        navigate('/admin', { replace: true })
+      } else {
+        navigate('/dashboard', { replace: true })
+      }
+    }
+  }, [isAuthenticated, user, navigate])
 
   const handleChange = (e) => {
     setFormData({
@@ -27,17 +38,14 @@ const LoginPage = () => {
     setError('')
 
     try {
-      // Call login from AuthContext (updates user state)
+      // login() will trigger the useEffect hook upon successful authentication
       await login(formData.phone, formData.password)
-
-      // Redirect to dashboard
-      navigate('/dashboard')
     } catch (err) {
       console.error('Login error:', err)
       setError(err.response?.data?.error?.message || err.message || 'Invalid phone or password')
-    } finally {
-      setLoading(false)
+      setLoading(false) // Stop loading only on error
     }
+    // On success, the useEffect handles the redirect, so no need to setLoading(false) here.
   }
 
   return (

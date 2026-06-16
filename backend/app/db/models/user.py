@@ -5,7 +5,6 @@ User model for database operations
 from typing import Optional, Dict, Any
 from datetime import datetime
 
-
 class User:
     """User model representing a user in the system"""
 
@@ -19,6 +18,7 @@ class User:
         password_hash: Optional[str] = None,
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None,
+        segment: Optional[Dict[str, Any]] = None, # Added segment field
     ):
         self.id = id
         self.phone = phone
@@ -28,6 +28,7 @@ class User:
         self.password_hash = password_hash
         self.created_at = created_at or datetime.now()
         self.updated_at = updated_at or datetime.now()
+        self.segment = segment # Assign segment
 
     def to_dict(self, include_password: bool = False) -> Dict[str, Any]:
         """
@@ -47,12 +48,14 @@ class User:
             "balance": self.balance,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "segment": self.segment, # Include segment in dict
         }
 
         if include_password and self.password_hash:
             user_dict["password_hash"] = self.password_hash
 
         return user_dict
+
 
     @staticmethod
     def from_db_row(row: tuple) -> "User":

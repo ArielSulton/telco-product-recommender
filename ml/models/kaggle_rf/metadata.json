@@ -1,0 +1,40 @@
+{
+  "model_type": "RandomForestClassifier",
+  "dataset": "Telco_customer_churn.xlsx",
+  "target_type": "label_rekomendasi_bahasa_indonesia",
+  "feature_columns": [
+    "plan_type_encoded",
+    "device_brand_encoded",
+    "avg_data_usage_gb",
+    "pct_video_usage",
+    "avg_call_duration",
+    "sms_freq",
+    "monthly_spend",
+    "topup_freq",
+    "travel_score",
+    "complaint_count",
+    "recency",
+    "frequency",
+    "monetary",
+    "arpu",
+    "avg_spend_per_topup",
+    "data_intensity",
+    "communication_intensity",
+    "churn_score",
+    "freq_x_monetary",
+    "arpu_per_data",
+    "loyalty_score"
+  ],
+  "target_classes": [
+    "Paket Data Premium",
+    "Paket Keluarga/Kombo",
+    "Paket Kuota Besar",
+    "Paket Pemula",
+    "Paket Retensi",
+    "Paket Telepon"
+  ],
+  "n_features": 21,
+  "n_classes": 6,
+  "accuracy": 0.868,
+  "top3_accuracy": 0.9957
+}

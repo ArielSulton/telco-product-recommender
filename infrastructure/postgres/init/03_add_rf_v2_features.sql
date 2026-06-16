@@ -1,18 +1,18 @@
 -- ==============================================
--- RF V2 MODEL SUPPORT - DATABASE MIGRATION
+-- DUKUNGAN MODEL RF V2 - MIGRASI DATABASE
 -- ==============================================
--- PostgreSQL migration script for RandomForest v2 recommendation model
--- Created: 2025-01-20
--- Purpose: Add behavioral features for RF-based personalized recommendations
--- Dependencies: 02_create_users_table.sql
--- ==============================================
-
--- ==============================================
--- BEHAVIORAL FEATURES FOR RF V2 MODEL
+-- migrasi PostgreSQL untuk model rekomendasi RandomForest v2
+-- Dibuat: 2025-01-20
+-- Tujuan: Menambahkan fitur perilaku untuk rekomendasi personal berbasis RF
+-- Ketergantungan: 02_create_users_table.sql
 -- ==============================================
 
--- Add behavioral feature columns to app_users table
--- These features are inferred from purchase behavior and used by RF model
+-- ==============================================
+-- FITUR PERILAKU UNTUK MODEL RF V2
+-- ==============================================
+
+-- Tambahkan kolom fitur perilaku ke tabel app_users
+-- Fitur ini disimpulkan dari perilaku pembelian dan digunakan oleh model RF
 ALTER TABLE app_users
   ADD COLUMN IF NOT EXISTS plan_type VARCHAR(20) DEFAULT 'Prepaid' CHECK (plan_type IN ('Prepaid', 'Postpaid')),
   ADD COLUMN IF NOT EXISTS device_brand VARCHAR(50) DEFAULT 'Samsung',
@@ -27,26 +27,26 @@ ALTER TABLE app_users
   ADD COLUMN IF NOT EXISTS last_purchase_date TIMESTAMP,
   ADD COLUMN IF NOT EXISTS total_purchases INTEGER DEFAULT 0 CHECK (total_purchases >= 0);
 
--- Column comments for documentation
-COMMENT ON COLUMN app_users.plan_type IS 'User plan type: Prepaid or Postpaid (categorical feature)';
-COMMENT ON COLUMN app_users.device_brand IS 'User device brand: Samsung, Apple, Xiaomi, etc. (categorical feature)';
-COMMENT ON COLUMN app_users.avg_data_usage_gb IS 'Average data usage in GB/month (inferred from purchased quotas)';
-COMMENT ON COLUMN app_users.pct_video_usage IS 'Percentage of data used for video streaming (inferred from product family)';
-COMMENT ON COLUMN app_users.avg_call_duration IS 'Average call duration in minutes (inferred from voice packages)';
-COMMENT ON COLUMN app_users.sms_freq IS 'SMS frequency per month (inferred from product type)';
-COMMENT ON COLUMN app_users.monthly_spend IS 'Total spending in last 30 days (calculated from purchases)';
-COMMENT ON COLUMN app_users.topup_freq IS 'Top-up frequency in last 30 days (calculated from purchases)';
-COMMENT ON COLUMN app_users.travel_score IS 'Travel propensity score 0-1 (inferred from roaming packages)';
-COMMENT ON COLUMN app_users.complaint_count IS 'Total complaint count (static or from support system)';
-COMMENT ON COLUMN app_users.last_purchase_date IS 'Timestamp of most recent purchase';
-COMMENT ON COLUMN app_users.total_purchases IS 'Lifetime purchase count';
+-- Komentar kolom untuk dokumentasi
+COMMENT ON COLUMN app_users.plan_type IS 'Jenis paket pengguna: Prepaid atau Postpaid (fitur kategorikal)';
+COMMENT ON COLUMN app_users.device_brand IS 'Merek perangkat pengguna: Samsung, Apple, Xiaomi, dll. (fitur kategorikal)';
+COMMENT ON COLUMN app_users.avg_data_usage_gb IS 'Rata-rata penggunaan data dalam GB/bulan (disimpulkan dari kuota yang dibeli)';
+COMMENT ON COLUMN app_users.pct_video_usage IS 'Persentase data yang digunakan untuk streaming video (disimpulkan dari jenis produk)';
+COMMENT ON COLUMN app_users.avg_call_duration IS 'Rata-rata durasi panggilan dalam menit (disimpulkan dari paket voice)';
+COMMENT ON COLUMN app_users.sms_freq IS 'Frekuensi SMS per bulan (disimpulkan dari jenis produk)';
+COMMENT ON COLUMN app_users.monthly_spend IS 'Total pengeluaran dalam 30 hari terakhir (dihitung dari pembelian)';
+COMMENT ON COLUMN app_users.topup_freq IS 'Frekuensi top-up dalam 30 hari terakhir (dihitung dari pembelian)';
+COMMENT ON COLUMN app_users.travel_score IS 'Skor kecenderungan bepergian 0-1 (disimpulkan dari paket roaming)';
+COMMENT ON COLUMN app_users.complaint_count IS 'Total jumlah komplain (statis atau dari sistem support)';
+COMMENT ON COLUMN app_users.last_purchase_date IS 'Waktu pembelian terakhir';
+COMMENT ON COLUMN app_users.total_purchases IS 'Jumlah total pembelian sepanjang waktu';
 
 -- ==============================================
--- PURCHASES TABLE FOR RF V2 TRACKING
+-- TABEL PURCHASES UNTUK PELACAKAN RF V2
 -- ==============================================
 
--- Create purchases table (separate from ML transactions table)
--- This table tracks frontend purchases with product family for feature inference
+-- Buat tabel purchases (terpisah dari tabel transactions ML)
+-- Tabel ini melacak pembelian dari frontend beserta product_family untuk inferensi fitur
 CREATE TABLE IF NOT EXISTS purchases (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
@@ -62,22 +62,22 @@ CREATE TABLE IF NOT EXISTS purchases (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-COMMENT ON TABLE purchases IS 'Purchase history for RF v2 feature tracking and behavioral inference';
-COMMENT ON COLUMN purchases.product_family IS 'Product category: Data Booster, Streaming Partner Pack, Voice Bundle, etc.';
-COMMENT ON COLUMN purchases.quota_data_mb IS 'Data quota in MB (used to infer avg_data_usage_gb)';
-COMMENT ON COLUMN purchases.payment_method IS 'Payment method: pulsa, gopay, ovo, dana, credit_card';
+COMMENT ON TABLE purchases IS 'Riwayat pembelian untuk pelacakan fitur RF v2 dan inferensi perilaku';
+COMMENT ON COLUMN purchases.product_family IS 'Kategori produk: Data Booster, Streaming Partner Pack, Voice Bundle, dll.';
+COMMENT ON COLUMN purchases.quota_data_mb IS 'Kuota data dalam MB (digunakan untuk menyimpulkan avg_data_usage_gb)';
+COMMENT ON COLUMN purchases.payment_method IS 'Metode pembayaran: pulsa, gopay, ovo, dana, credit_card';
 
 -- ==============================================
--- PERFORMANCE INDEXES
+-- INDEX UNTUK PERFORMA
 -- ==============================================
 
--- Indexes for app_users behavioral features
+-- Index untuk fitur perilaku app_users
 CREATE INDEX IF NOT EXISTS idx_app_users_plan_device ON app_users(plan_type, device_brand);
 CREATE INDEX IF NOT EXISTS idx_app_users_monthly_spend ON app_users(monthly_spend DESC);
 CREATE INDEX IF NOT EXISTS idx_app_users_last_purchase ON app_users(last_purchase_date DESC);
 CREATE INDEX IF NOT EXISTS idx_app_users_total_purchases ON app_users(total_purchases DESC);
 
--- Indexes for purchases table
+-- Index untuk tabel purchases
 CREATE INDEX IF NOT EXISTS idx_purchases_user_id ON purchases(user_id);
 CREATE INDEX IF NOT EXISTS idx_purchases_product_id ON purchases(product_id);
 CREATE INDEX IF NOT EXISTS idx_purchases_date ON purchases(purchase_date DESC);
@@ -86,17 +86,16 @@ CREATE INDEX IF NOT EXISTS idx_purchases_status ON purchases(status);
 CREATE INDEX IF NOT EXISTS idx_purchases_family ON purchases(product_family) WHERE product_family IS NOT NULL;
 
 -- ==============================================
--- TRIGGERS FOR AUTOMATIC TIMESTAMP UPDATES
+-- TRIGGER UNTUK AUTO-UPDATE TIMESTAMP
 -- ==============================================
 
--- Trigger to auto-update updated_at on purchases (if updated_at column exists)
--- Note: purchases table doesn't have updated_at by design (immutable records)
+-- Catatan: Tabel purchases tidak memiliki kolom updated_at karena bersifat immutable (tidak bisa diubah)
 
 -- ==============================================
--- VIEWS FOR RF V2 ANALYTICS
+-- VIEW UNTUK ANALITIK RF V2
 -- ==============================================
 
--- View: User features summary for RF model
+-- View: Ringkasan fitur pengguna untuk model RF
 CREATE OR REPLACE VIEW v_rf_user_features AS
 SELECT
     u.id,
@@ -118,11 +117,11 @@ SELECT
     u.created_at,
     u.updated_at
 FROM app_users u
-WHERE u.total_purchases >= 1;  -- Only users with purchase history
+WHERE u.total_purchases >= 1;  -- Hanya pengguna yang sudah pernah membeli
 
-COMMENT ON VIEW v_rf_user_features IS 'User behavioral features for RF v2 model inference';
+COMMENT ON VIEW v_rf_user_features IS 'Fitur perilaku pengguna untuk inferensi model RF v2';
 
--- View: Purchase analytics with product family
+-- View: Analitik pembelian berdasarkan product_family
 CREATE OR REPLACE VIEW v_purchase_analytics AS
 SELECT
     p.user_id,
@@ -138,9 +137,9 @@ FROM purchases p
 WHERE p.status = 'completed'
 GROUP BY p.user_id, p.product_family;
 
-COMMENT ON VIEW v_purchase_analytics IS 'Purchase analytics by user and product family for feature engineering';
+COMMENT ON VIEW v_purchase_analytics IS 'Analitik pembelian per pengguna dan product_family untuk rekayasa fitur';
 
--- View: Recent purchases for feature updates
+-- View: Pembelian terbaru dalam 30 hari untuk pembaruan fitur
 CREATE OR REPLACE VIEW v_recent_purchases_30d AS
 SELECT
     p.user_id,
@@ -153,13 +152,13 @@ WHERE p.status = 'completed'
   AND p.purchase_date >= NOW() - INTERVAL '30 days'
 GROUP BY p.user_id;
 
-COMMENT ON VIEW v_recent_purchases_30d IS 'Aggregated purchase stats for last 30 days (used in feature updates)';
+COMMENT ON VIEW v_recent_purchases_30d IS 'Statistik pembelian agregat 30 hari terakhir (digunakan untuk pembaruan fitur)';
 
 -- ==============================================
--- DATA INTEGRITY CONSTRAINTS
+-- BATASAN INTEGRITAS DATA
 -- ==============================================
 
--- Add foreign key constraint for purchases.product_id (if products table exists)
+-- Tambahkan foreign key constraint untuk purchases.product_id (jika tabel products ada)
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'products') THEN
@@ -167,18 +166,17 @@ BEGIN
         ADD CONSTRAINT fk_purchases_product_id
         FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE RESTRICT;
 
-        RAISE NOTICE '✅ Added foreign key constraint: purchases.product_id → products.product_id';
+        RAISE NOTICE '✅ Foreign key constraint ditambahkan: purchases.product_id → products.product_id';
     ELSE
-        RAISE NOTICE '⚠️  Skipped foreign key constraint: products table not found';
+        RAISE NOTICE '⚠️  Foreign key constraint dilewati: tabel products tidak ditemukan';
     END IF;
 END $$;
 
 -- ==============================================
--- SAMPLE DATA FOR TESTING (OPTIONAL)
+-- DATA CONTOH UNTUK TESTING (OPSIONAL)
 -- ==============================================
 
--- Insert sample user with behavioral features for testing
--- This is useful for development and testing RF model inference
+-- Masukkan contoh pengguna dengan fitur perilaku untuk testing inferensi model RF
 INSERT INTO app_users (
     phone, password_hash, name, role, balance,
     plan_type, device_brand, avg_data_usage_gb, pct_video_usage,
@@ -192,41 +190,41 @@ INSERT INTO app_users (
     500000,
     'Prepaid',
     'Samsung',
-    8.5,    -- High data user
-    0.65,   -- 65% video usage
-    12.0,   -- Moderate call duration
-    18,     -- SMS frequency
-    150000, -- Monthly spend
-    3,      -- Top-up frequency
-    0.4,    -- Travel score
-    0,      -- No complaints
-    5       -- 5 purchases
+    8.5,    -- Pengguna data tinggi
+    0.65,   -- 65% penggunaan video
+    12.0,   -- Durasi panggilan sedang
+    18,     -- Frekuensi SMS
+    150000, -- Pengeluaran bulanan
+    3,      -- Frekuensi top-up
+    0.4,    -- Skor perjalanan
+    0,      -- Tidak ada komplain
+    5       -- 5 pembelian
 ) ON CONFLICT (phone) DO NOTHING;
 
 -- ==============================================
--- COMPLETION MESSAGE
+-- PESAN SELESAI
 -- ==============================================
 
 DO $$
 BEGIN
-    RAISE NOTICE '✅ RF v2 database migration completed successfully';
-    RAISE NOTICE '   - Added 12 behavioral feature columns to app_users';
-    RAISE NOTICE '   - Created purchases table for purchase tracking';
-    RAISE NOTICE '   - Created 10 performance indexes';
-    RAISE NOTICE '   - Created 3 analytics views for feature engineering';
-    RAISE NOTICE '   - Sample test user inserted (phone: test_rf_user, password: test123)';
+    RAISE NOTICE '✅ Migrasi database RF v2 berhasil diselesaikan';
+    RAISE NOTICE '   - Menambahkan 12 kolom fitur perilaku ke app_users';
+    RAISE NOTICE '   - Membuat tabel purchases untuk pelacakan pembelian';
+    RAISE NOTICE '   - Membuat 10 index performa';
+    RAISE NOTICE '   - Membuat 3 view analitik untuk rekayasa fitur';
+    RAISE NOTICE '   - Pengguna test dimasukkan (phone: test_rf_user, password: test123)';
     RAISE NOTICE '';
-    RAISE NOTICE '📊 RF v2 Model Features (21 total):';
-    RAISE NOTICE '   Base: plan_type, device_brand, avg_data_usage_gb, pct_video_usage,';
-    RAISE NOTICE '         avg_call_duration, sms_freq, monthly_spend, topup_freq,';
-    RAISE NOTICE '         travel_score, complaint_count (10 features)';
-    RAISE NOTICE '   Engineered: recency, frequency, monetary, arpu, avg_spend_per_topup,';
-    RAISE NOTICE '               data_intensity, communication_intensity, churn_score,';
-    RAISE NOTICE '               freq_x_monetary, arpu_per_data, loyalty_score (11 features)';
+    RAISE NOTICE '📊 Fitur Model RF v2 (total 21):';
+    RAISE NOTICE '   Dasar: plan_type, device_brand, avg_data_usage_gb, pct_video_usage,';
+    RAISE NOTICE '          avg_call_duration, sms_freq, monthly_spend, topup_freq,';
+    RAISE NOTICE '          travel_score, complaint_count (10 fitur)';
+    RAISE NOTICE '   Rekayasa: recency, frequency, monetary, arpu, avg_spend_per_topup,';
+    RAISE NOTICE '             data_intensity, communication_intensity, churn_score,';
+    RAISE NOTICE '             freq_x_monetary, arpu_per_data, loyalty_score (11 fitur)';
     RAISE NOTICE '';
-    RAISE NOTICE '🎯 Next Steps:';
+    RAISE NOTICE '🎯 Langkah Selanjutnya:';
     RAISE NOTICE '   1. Deploy Airflow DAG: rf_v2_retraining.py';
-    RAISE NOTICE '   2. Run initial model training';
-    RAISE NOTICE '   3. Monitor purchase → feature update flow';
-    RAISE NOTICE '   4. Validate RF v2 recommendations via /api/v1/recommend/v2';
+    RAISE NOTICE '   2. Jalankan pelatihan model awal';
+    RAISE NOTICE '   3. Pantau alur pembelian → pembaruan fitur';
+    RAISE NOTICE '   4. Validasi rekomendasi RF v2 via /api/v1/recommend/v2';
 END $$;

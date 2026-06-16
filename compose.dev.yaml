@@ -22,6 +22,18 @@ services:
       timeout: 5s
       retries: 5
 
+  # PostgreSQL Web UI
+  adminer:
+    image: adminer:latest
+    container_name: telco-adminer-dev
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - telco-network
+
   # Redis Cache
   redis:
     image: redis:7-alpine
@@ -83,6 +95,8 @@ services:
     volumes:
       - ./backend:/app
       - /app/__pycache__
+      - ./ml/models:/app/ml/models:ro
+      - ./ml/data:/app/ml/data:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,7 +104,13 @@ services:
         condition: service_healthy
     networks:
       - telco-network
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: >
+      /bin/bash -c "
+      echo 'Seeding admin user...';
+      python /app/scripts/seed_admin.py || echo 'Admin seed skipped';
+      echo 'Starting uvicorn...';
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      "
 
   # Frontend (React + Vite)
   frontend:
@@ -101,12 +121,12 @@ services:
     env_file:
       - .env
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=http://localhost:8000/api/v1
     ports:
       - "5173:5173"
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - frontend_node_modules:/app/node_modules
     depends_on:
       - backend
     networks:
@@ -134,6 +154,8 @@ services:
       --artifacts-destination /mlflow/artifacts
       --host 0.0.0.0
       --port 5000
+
+
 
   # ML training image for local experimentation
   ml:
@@ -163,6 +185,16 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
+    networks:
+      - telco-network
+
+  statsd-exporter:
+    image: prom/statsd-exporter:latest
+    container_name: telco-statsd-exporter-dev
+    command: --statsd.listen-udp=:8125 --web.listen-address=:9102
+    ports:
+      - "9102:9102" # Prometheus scrape port
+      - "8125:8125/udp" # StatsD UDP port
     networks:
       - telco-network
 
@@ -237,6 +269,11 @@ services:
       - AIRFLOW__WEBSERVER__BASE_URL=http://airflow-webserver:8080
       - AIRFLOW__WEBSERVER__WEB_SERVER_URL=http://airflow-webserver:8080
       - AIRFLOW_CONN_FASTAPI_BACKEND=http://backend:8000
+      - AIRFLOW__METRICS__STATS_ON=True
+      - AIRFLOW__METRICS__STATSD_ON=True
+      - AIRFLOW__METRICS__STATSD_HOST=statsd-exporter
+      - AIRFLOW__METRICS__STATSD_PORT=8125
+      - AIRFLOW__METRICS__STATSD_PREFIX=airflow
     ports:
       - "8080:8080"
     volumes:
@@ -269,6 +306,11 @@ services:
       - AIRFLOW__WEBSERVER__BASE_URL=http://airflow-webserver:8080
       - AIRFLOW__WEBSERVER__WEB_SERVER_URL=http://airflow-webserver:8080
       - AIRFLOW_CONN_FASTAPI_BACKEND=http://backend:8000
+      - AIRFLOW__METRICS__STATS_ON=True
+      - AIRFLOW__METRICS__STATSD_ON=True
+      - AIRFLOW__METRICS__STATSD_HOST=statsd-exporter
+      - AIRFLOW__METRICS__STATSD_PORT=8125
+      - AIRFLOW__METRICS__STATSD_PREFIX=airflow
     volumes:
       - ./infrastructure/airflow/dags:/opt/airflow/dags
       - ./infrastructure/airflow/plugins:/opt/airflow/plugins
@@ -302,3 +344,4 @@ volumes:
     driver: local
   airflow_logs:
     driver: local
+  frontend_node_modules:

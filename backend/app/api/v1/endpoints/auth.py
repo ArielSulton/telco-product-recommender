@@ -21,6 +21,7 @@ from app.core.security import (
 from app.core.logging import logger
 from app.db.models.user import User
 from app.db.database import get_db_connection
+from app.core.segments import get_segment_details # Import get_segment_details
 
 router = APIRouter()
 
@@ -90,11 +91,11 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> User:
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token payload")
 
-    # Fetch user from database
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
+        # Fetch user from app_users table
         cursor.execute(
             """
             SELECT id, phone, password_hash, name, role, balance, created_at, updated_at
@@ -108,7 +109,23 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> User:
         if not row:
             raise HTTPException(status_code=401, detail="User not found")
 
-        return User.from_db_row(row)
+        user = User.from_db_row(row)
+
+        # Fetch segment_id from the 'users' (ML) table
+        cursor.execute(
+            """
+            SELECT segment_id FROM users
+            WHERE user_id = %s
+            """,
+            (user.id,)
+        )
+        segment_row = cursor.fetchone()
+        segment_id = segment_row[0] if segment_row else 0 # Default to 0 if not found
+
+        # Get segment details from the map and assign to user object
+        user.segment = get_segment_details(segment_id)
+
+        return user
 
     finally:
         cursor.close()
@@ -165,6 +182,8 @@ async def register(request: RegisterRequest):
         )
 
         # Also create user in ML 'users' table for recommendations
+        # Assign default segment_id 0 for new users
+        new_user_segment_id = 0
         try:
             msisdn_hash = hashlib.sha256(request.phone.encode()).hexdigest()
             cursor.execute(
@@ -173,13 +192,16 @@ async def register(request: RegisterRequest):
                 VALUES (%s, %s, NOW(), %s)
                 ON CONFLICT (user_id) DO NOTHING
                 """,
-                (user.id, msisdn_hash, 0),  # segment_id=0 for new users
+                (user.id, msisdn_hash, new_user_segment_id),
             )
         except Exception as ml_error:
             # Log but don't fail registration if ML sync fails
             print(f"Warning: Failed to sync user to ML table: {ml_error}")
 
         conn.commit()
+
+        # Get segment details for the new user and assign to user object
+        user.segment = get_segment_details(new_user_segment_id)
 
         # Generate JWT token
         access_token = create_access_token(
@@ -245,6 +267,20 @@ async def login(request: LoginRequest):
         # Verify password
         if not verify_password(request.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Invalid phone or password")
+
+        # Fetch segment_id from the 'users' (ML) table
+        cursor.execute(
+            """
+            SELECT segment_id FROM users
+            WHERE user_id = %s
+            """,
+            (user.id,)
+        )
+        segment_row = cursor.fetchone()
+        segment_id = segment_row[0] if segment_row else 0 # Default to 0 if not found
+
+        # Get segment details from the map and assign to user object
+        user.segment = get_segment_details(segment_id)
 
         # Generate JWT token
         access_token = create_access_token(

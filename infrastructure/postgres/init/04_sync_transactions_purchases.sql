@@ -1,59 +1,59 @@
 -- ==============================================
--- TRANSACTIONS <-> PURCHASES SYNCHRONIZATION
+-- SINKRONISASI TRANSACTIONS <-> PURCHASES
 -- ==============================================
--- PostgreSQL sync script for dual-table purchase tracking
--- Created: 2025-01-20
--- Purpose: Maintain data consistency between ML pipeline (transactions)
---          and frontend system (purchases) tables
--- Dependencies: 01_init.sql, 03_add_rf_v2_features.sql
--- ==============================================
-
--- ==============================================
--- BACKGROUND
--- ==============================================
--- The system uses TWO purchase tracking tables:
---
--- 1. `transactions` table (from 01_init.sql)
---    - Used by ML pipeline (hybrid model: K-Means, LightFM, XGBoost)
---    - Schema: user_id (references users.user_id), product_id, amount, status
---    - Purpose: Collaborative filtering, segmentation, baseline recommendations
---
--- 2. `purchases` table (from backend purchases.py + 03_add_rf_v2_features.sql)
---    - Used by frontend and RF v2 model
---    - Schema: user_id (references app_users.id), product_name, product_family, quota_data_mb
---    - Purpose: Real-time feature tracking, behavioral inference, RF recommendations
---
--- This dual-table design exists because:
--- - ML pipeline uses `users` table (SHA-256 hashed msisdn)
--- - Frontend uses `app_users` table (authentication with phone, password, balance)
--- - Different schemas serve different purposes (amount vs quotas, product_id vs product_family)
---
+-- Skrip sinkronisasi PostgreSQL untuk pelacakan pembelian dua tabel
+-- Dibuat: 2025-01-20
+-- Tujuan: Menjaga konsistensi data antara tabel ML pipeline (transactions)
+--         dan sistem frontend (purchases)
+-- Ketergantungan: 01_init.sql, 03_add_rf_v2_features.sql
 -- ==============================================
 
 -- ==============================================
--- SYNC STRATEGY: TRIGGER-BASED REPLICATION
+-- LATAR BELAKANG
+-- ==============================================
+-- Sistem menggunakan DUA tabel pelacakan pembelian:
+--
+-- 1. Tabel `transactions` (dari 01_init.sql)
+--    - Digunakan oleh ML pipeline (model hybrid: K-Means, LightFM, XGBoost)
+--    - Skema: user_id (referensi users.user_id), product_id, amount, status
+--    - Tujuan: Collaborative filtering, segmentasi, rekomendasi dasar
+--
+-- 2. Tabel `purchases` (dari backend purchases.py + 03_add_rf_v2_features.sql)
+--    - Digunakan oleh frontend dan model RF v2
+--    - Skema: user_id (referensi app_users.id), product_name, product_family, quota_data_mb
+--    - Tujuan: Pelacakan fitur real-time, inferensi perilaku, rekomendasi RF
+--
+-- Desain dua tabel ini ada karena:
+-- - ML pipeline menggunakan tabel `users` (msisdn di-hash SHA-256)
+-- - Frontend menggunakan tabel `app_users` (autentikasi dengan phone, password, balance)
+-- - Skema berbeda melayani tujuan berbeda (amount vs kuota, product_id vs product_family)
+--
 -- ==============================================
 
--- Create sync function: purchases → transactions
--- When a purchase is inserted into `purchases`, replicate to `transactions` for ML pipeline
+-- ==============================================
+-- STRATEGI SINKRONISASI: REPLIKASI BERBASIS TRIGGER
+-- ==============================================
+
+-- Buat fungsi sinkronisasi: purchases → transactions
+-- Ketika pembelian dimasukkan ke `purchases`, replikasi ke `transactions` untuk ML pipeline
 CREATE OR REPLACE FUNCTION sync_purchase_to_transaction()
 RETURNS TRIGGER AS $$
 DECLARE
     ml_user_id UUID;
 BEGIN
-    -- Map app_users.id to users.user_id using phone number
-    -- This assumes users table has msisdn_hash and app_users has phone
-    -- For MVP, we'll create a mapping table or use direct UUID mapping
+    -- Petakan app_users.id ke users.user_id menggunakan nomor telepon
+    -- Ini mengasumsikan tabel users memiliki msisdn_hash dan app_users memiliki phone
+    -- Untuk MVP, kita gunakan pemetaan UUID langsung
 
-    -- Option 1: Direct UUID mapping (if app_users.id == users.user_id)
+    -- Opsi 1: Pemetaan UUID langsung (jika app_users.id == users.user_id)
     ml_user_id := NEW.user_id;
 
-    -- Option 2: Lookup via phone (requires phone column in users table)
+    -- Opsi 2: Pencarian via phone (membutuhkan kolom phone di tabel users)
     -- SELECT user_id INTO ml_user_id FROM users WHERE phone = (
     --     SELECT phone FROM app_users WHERE id = NEW.user_id
     -- );
 
-    -- Insert into transactions table for ML pipeline
+    -- Masukkan ke tabel transactions untuk ML pipeline
     INSERT INTO transactions (
         user_id,
         product_id,
@@ -67,33 +67,33 @@ BEGIN
         NEW.price,
         NEW.status
     )
-    ON CONFLICT DO NOTHING;  -- Avoid duplicates
+    ON CONFLICT DO NOTHING;  -- Hindari duplikasi
 
     RETURN NEW;
 EXCEPTION
     WHEN OTHERS THEN
-        -- Log error but don't fail the purchase
-        RAISE WARNING 'Failed to sync purchase to transactions: %', SQLERRM;
+        -- Catat error tapi jangan gagalkan pembelian
+        RAISE WARNING 'Gagal sinkronisasi pembelian ke transactions: %', SQLERRM;
         RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION sync_purchase_to_transaction IS 'Sync purchases table to transactions table for ML pipeline';
+COMMENT ON FUNCTION sync_purchase_to_transaction IS 'Sinkronisasi tabel purchases ke tabel transactions untuk ML pipeline';
 
--- Create trigger on purchases table
+-- Buat trigger pada tabel purchases
 DROP TRIGGER IF EXISTS trigger_sync_purchase_to_transaction ON purchases;
 CREATE TRIGGER trigger_sync_purchase_to_transaction
     AFTER INSERT ON purchases
     FOR EACH ROW
     EXECUTE FUNCTION sync_purchase_to_transaction();
 
-COMMENT ON TRIGGER trigger_sync_purchase_to_transaction ON purchases IS 'Auto-sync purchases to transactions for ML pipeline';
+COMMENT ON TRIGGER trigger_sync_purchase_to_transaction ON purchases IS 'Auto-sinkronisasi purchases ke transactions untuk ML pipeline';
 
 -- ==============================================
--- RECONCILIATION VIEWS
+-- VIEW REKONSILIASI
 -- ==============================================
 
--- View: Unified purchase history (combines both tables)
+-- View: Riwayat pembelian terpadu (menggabungkan kedua tabel)
 CREATE OR REPLACE VIEW v_unified_purchase_history AS
 SELECT
     'purchase' AS source,
@@ -132,20 +132,20 @@ FROM transactions t
 LEFT JOIN products pr ON t.product_id = pr.product_id
 WHERE t.status = 'completed'
   AND NOT EXISTS (
-      -- Exclude transactions that have corresponding purchases (avoid duplicates)
+      -- Kecualikan transaksi yang sudah ada di purchases (hindari duplikasi)
       SELECT 1 FROM purchases p
       WHERE p.user_id = t.user_id
         AND p.product_id = t.product_id
         AND p.purchase_date = t.transaction_date
   );
 
-COMMENT ON VIEW v_unified_purchase_history IS 'Unified view of all purchases from both tables (deduped)';
+COMMENT ON VIEW v_unified_purchase_history IS 'View terpadu semua pembelian dari kedua tabel (tanpa duplikasi)';
 
--- View: Purchase discrepancy report (for monitoring)
+-- View: Laporan ketidaksesuaian pembelian (untuk monitoring)
 CREATE OR REPLACE VIEW v_purchase_discrepancy_report AS
 SELECT
-    'in_purchases_not_transactions' AS discrepancy_type,
-    COUNT(*) AS count
+    'ada_di_purchases_tidak_di_transactions' AS jenis_ketidaksesuaian,
+    COUNT(*) AS jumlah
 FROM purchases p
 LEFT JOIN transactions t ON p.user_id = t.user_id
     AND p.product_id = t.product_id
@@ -157,8 +157,8 @@ WHERE t.transaction_id IS NULL
 UNION ALL
 
 SELECT
-    'in_transactions_not_purchases' AS discrepancy_type,
-    COUNT(*) AS count
+    'ada_di_transactions_tidak_di_purchases' AS jenis_ketidaksesuaian,
+    COUNT(*) AS jumlah
 FROM transactions t
 LEFT JOIN purchases p ON t.user_id = p.user_id
     AND t.product_id = p.product_id
@@ -167,14 +167,14 @@ WHERE p.id IS NULL
   AND t.status = 'completed'
   AND t.transaction_date >= NOW() - INTERVAL '7 days';
 
-COMMENT ON VIEW v_purchase_discrepancy_report IS 'Monitor sync issues between purchases and transactions tables';
+COMMENT ON VIEW v_purchase_discrepancy_report IS 'Pantau masalah sinkronisasi antara tabel purchases dan transactions';
 
 -- ==============================================
--- DATA RECONCILIATION FUNCTION
+-- FUNGSI REKONSILIASI DATA
 -- ==============================================
 
--- Function to manually reconcile missing transactions
--- Run this periodically via cron or Airflow to backfill any missed syncs
+-- Fungsi untuk merekonsiliasi transaksi yang hilang secara manual
+-- Jalankan secara berkala via cron atau Airflow untuk mengisi ulang sinkronisasi yang terlewat
 CREATE OR REPLACE FUNCTION reconcile_purchases_to_transactions()
 RETURNS TABLE(inserted_count INTEGER, error_count INTEGER) AS $$
 DECLARE
@@ -182,7 +182,7 @@ DECLARE
     v_errors INTEGER := 0;
     v_purchase RECORD;
 BEGIN
-    -- Find purchases not in transactions
+    -- Cari pembelian yang belum ada di transactions
     FOR v_purchase IN
         SELECT p.*
         FROM purchases p
@@ -214,7 +214,7 @@ BEGIN
         EXCEPTION
             WHEN OTHERS THEN
                 v_errors := v_errors + 1;
-                RAISE WARNING 'Failed to insert purchase %: %', v_purchase.id, SQLERRM;
+                RAISE WARNING 'Gagal memasukkan pembelian %: %', v_purchase.id, SQLERRM;
         END;
     END LOOP;
 
@@ -222,18 +222,18 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION reconcile_purchases_to_transactions IS 'Manually reconcile purchases to transactions (backfill)';
+COMMENT ON FUNCTION reconcile_purchases_to_transactions IS 'Rekonsiliasi manual purchases ke transactions (backfill)';
 
 -- ==============================================
--- MONITORING QUERIES
+-- QUERY MONITORING
 -- ==============================================
 
--- Query to check sync health
--- Run periodically to monitor data consistency
-COMMENT ON VIEW v_purchase_discrepancy_report IS 'Expected: 0 discrepancies. Run: SELECT * FROM v_purchase_discrepancy_report;';
+-- Query untuk memeriksa kesehatan sinkronisasi
+-- Jalankan secara berkala untuk memantau konsistensi data
+COMMENT ON VIEW v_purchase_discrepancy_report IS 'Diharapkan: 0 ketidaksesuaian. Jalankan: SELECT * FROM v_purchase_discrepancy_report;';
 
 -- ==============================================
--- COMPLETION MESSAGE
+-- PESAN SELESAI
 -- ==============================================
 
 DO $$
@@ -242,29 +242,29 @@ DECLARE
     transaction_count INTEGER;
     discrepancy_count INTEGER;
 BEGIN
-    -- Count records
+    -- Hitung jumlah record
     SELECT COUNT(*) INTO purchase_count FROM purchases WHERE status = 'completed';
     SELECT COUNT(*) INTO transaction_count FROM transactions WHERE status = 'completed';
 
-    -- Check discrepancies
-    SELECT SUM(count) INTO discrepancy_count FROM v_purchase_discrepancy_report;
+    -- Periksa ketidaksesuaian
+    SELECT SUM(jumlah) INTO discrepancy_count FROM v_purchase_discrepancy_report;
 
-    RAISE NOTICE '✅ Purchases <-> Transactions sync configuration complete';
+    RAISE NOTICE '✅ Konfigurasi sinkronisasi Purchases <-> Transactions selesai';
     RAISE NOTICE '';
-    RAISE NOTICE '📊 Current Status:';
-    RAISE NOTICE '   Purchases (frontend): % records', purchase_count;
-    RAISE NOTICE '   Transactions (ML pipeline): % records', transaction_count;
-    RAISE NOTICE '   Discrepancies (last 7 days): %', COALESCE(discrepancy_count, 0);
+    RAISE NOTICE '📊 Status Saat Ini:';
+    RAISE NOTICE '   Purchases (frontend): % record', purchase_count;
+    RAISE NOTICE '   Transactions (ML pipeline): % record', transaction_count;
+    RAISE NOTICE '   Ketidaksesuaian (7 hari terakhir): %', COALESCE(discrepancy_count, 0);
     RAISE NOTICE '';
-    RAISE NOTICE '🔧 Sync Mechanism:';
+    RAISE NOTICE '🔧 Mekanisme Sinkronisasi:';
     RAISE NOTICE '   ✅ Trigger: purchases INSERT → transactions INSERT';
-    RAISE NOTICE '   ✅ View: v_unified_purchase_history (deduped)';
+    RAISE NOTICE '   ✅ View: v_unified_purchase_history (tanpa duplikasi)';
     RAISE NOTICE '   ✅ Monitor: v_purchase_discrepancy_report';
-    RAISE NOTICE '   ✅ Reconciliation: reconcile_purchases_to_transactions()';
+    RAISE NOTICE '   ✅ Rekonsiliasi: reconcile_purchases_to_transactions()';
     RAISE NOTICE '';
-    RAISE NOTICE '🎯 Next Steps:';
-    RAISE NOTICE '   1. Test purchase flow: POST /api/v1/purchases';
-    RAISE NOTICE '   2. Verify sync: SELECT * FROM v_purchase_discrepancy_report;';
-    RAISE NOTICE '   3. Backfill if needed: SELECT * FROM reconcile_purchases_to_transactions();';
-    RAISE NOTICE '   4. Schedule periodic reconciliation in Airflow';
+    RAISE NOTICE '🎯 Langkah Selanjutnya:';
+    RAISE NOTICE '   1. Test alur pembelian: POST /api/v1/purchases';
+    RAISE NOTICE '   2. Verifikasi sinkronisasi: SELECT * FROM v_purchase_discrepancy_report;';
+    RAISE NOTICE '   3. Backfill jika perlu: SELECT * FROM reconcile_purchases_to_transactions();';
+    RAISE NOTICE '   4. Jadwalkan rekonsiliasi berkala di Airflow';
 END $$;

@@ -27,8 +27,8 @@ RUN pip install --no-cache-dir \
 
 # Copy DAGs, plugins, and dependencies into image
 # Build context is project root, so paths are relative to root
-COPY --chown=airflow:root ./infrastructure/airflow/dags /opt/airflow/dags
-COPY --chown=airflow:root ./infrastructure/airflow/plugins /opt/airflow/plugins
-COPY --chown=airflow:root ./backend /opt/airflow/backend
-COPY --chown=airflow:root ./services /opt/airflow/services
-COPY --chown=airflow:root ./ml/data /opt/airflow/ml/data
+#COPY --chown=airflow:root ./infrastructure/airflow/dags /opt/airflow/dags
+#COPY --chown=airflow:root ./infrastructure/airflow/plugins /opt/airflow/plugins
+#COPY --chown=airflow:root ./backend /opt/airflow/backend
+#COPY --chown=airflow:root ./services /opt/airflow/services
+#COPY --chown=airflow:root ./ml/data /opt/airflow/ml/data

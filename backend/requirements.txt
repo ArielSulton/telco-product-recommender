@@ -14,10 +14,10 @@ redis==5.0.1
 aioredis==2.0.1
 
 # ML Libraries
-scikit-learn==1.3.2
+scikit-learn==1.6.1
 lightfm==1.17
 xgboost==2.0.3
-numpy==1.24.3
+numpy==1.26.4
 pandas==2.1.3
 shap==0.43.0
 optuna==3.5.0

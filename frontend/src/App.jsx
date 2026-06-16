@@ -36,6 +36,29 @@ const ProtectedRoute = ({ children }) => {
   return isAuthenticated ? children : <Navigate to="/login" replace />
 }
 
+// ✅ Admin Protected Route Component
+const AdminProtectedRoute = ({ children }) => {
+  const { user, isAuthenticated, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+
+  if (user?.role !== 'admin') {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  return children
+}
+
 function App() {
   return (
     <ErrorBoundary>
@@ -80,9 +103,9 @@ function App() {
               <Route
                 path="/admin"
                 element={
-                  <ProtectedRoute>
+                  <AdminProtectedRoute>
                     <AdminDashboardPage />
-                  </ProtectedRoute>
+                  </AdminProtectedRoute>
                 }
               />
 

@@ -274,6 +274,8 @@ async def get_recommendations(
                 SELECT product_id, product_name, product_family, price,
                        quota_data_mb, quota_voice_min, validity_days
                 FROM products
+                WHERE is_active = TRUE
+                  AND COALESCE(ikut_rekomendasi, TRUE) = TRUE
                 ORDER BY price ASC
                 LIMIT :limit
             """)

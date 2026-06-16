@@ -1,234 +1,187 @@
-# ML Pipeline - Telco Product Recommender
+# ML - Paketify Random Forest Recommendation Pipeline
 
-Machine learning pipeline for training and evaluating the hybrid recommendation system.
+Folder ini berisi dataset, preprocessing, feature engineering, training, evaluasi, dan artifact model Random Forest v2 yang dipakai backend.
 
-## Overview
+## Status Saat Ini
 
-Hybrid recommender combining:
-1. **Segmentation**: K-Means clustering on user features
-2. **Collaborative Filtering**: LightFM for candidate generation
-3. **Ranking**: XGBoost for final product ordering
-4. **Explainability**: SHAP for recommendation reasoning
+Model utama project saat ini adalah **Random Forest classifier**. Model dilatih menggunakan dataset Telco Customer Churn Kaggle sebanyak 7.043 data pelanggan, lalu diperkaya dengan fitur perilaku, label rekomendasi berbasis aturan bisnis, transaksi sintetis, dan event sintetis untuk kebutuhan aplikasi.
 
-## Technology Stack
+Pipeline hybrid lama berbasis K-Means, LightFM, dan XGBoost masih ada sebagai referensi lama, tetapi bukan jalur utama aplikasi web saat ini.
 
-- **Framework**: scikit-learn, LightFM, XGBoost
-- **Data Processing**: pandas, numpy
-- **Experiment Tracking**: MLflow
-- **Evaluation**: Custom metrics (NDCG, MAP, ROC-AUC)
-- **Notebooks**: Jupyter
-- **Visualization**: matplotlib, seaborn
+## Output Model
 
-## Project Structure
+Model memprediksi kelas rekomendasi:
 
+- `Paket Pemula`
+- `Paket Kuota Besar`
+- `Paket Telepon`
+- `Paket Keluarga/Kombo`
+- `Paket Retensi`
+- `Paket Data Premium`
+
+Backend kemudian memetakan kelas tersebut ke produk aktif di database.
+
+## Evaluasi Terbaru
+
+```text
+Accuracy: 86.8%
+Top-3 Accuracy: 99.57%
 ```
+
+File evaluasi berada di:
+
+```text
+ml/models/kaggle_rf/evaluation_plots/
+```
+
+Contoh output:
+
+- `confusion_matrix_rf.png`
+- `feature_importance_rf.png`
+- `classification_metrics_rf.png`
+- `classification_report.csv`
+- `evaluation_summary.json`
+
+## Struktur Folder
+
+```text
 ml/
-├── data/
-│   ├── raw/              # Raw transaction/event data
-│   ├── processed/        # Cleaned datasets
-│   └── features/         # Engineered features
-├── notebooks/
-│   ├── 01_eda.ipynb                     # Exploratory analysis
-│   ├── 02_feature_engineering.ipynb
-│   ├── 03_segmentation.ipynb           # K-Means
-│   ├── 04_collaborative_filtering.ipynb # LightFM
-│   ├── 05_ranking_model.ipynb          # XGBoost
-│   └── 06_evaluation.ipynb
-├── src/
-│   ├── data/            # ETL & preprocessing
-│   ├── features/        # Feature engineering (RFM, ARPU, etc.)
-│   ├── models/          # Model training scripts
-│   ├── evaluation/      # Metrics & analysis
-│   └── utils/           # Helper functions
-└── scripts/             # Training & evaluation scripts
+|-- data/
+|   |-- raw/                  Dataset mentah
+|   |-- processed/            Dataset hasil cleaning
+|   `-- features/             Dataset fitur dan target
+|-- models/
+|   `-- kaggle_rf/            Artifact Random Forest aktif
+|-- notebook/
+|   `-- kaggle_rf_retraining.ipynb
+|-- scripts/
+|   |-- preprocess_telco_kaggle.py
+|   |-- build_telco_recommendation_targets.py
+|   |-- generate_telco_synthetic_behavior.py
+|   `-- generate_rf_evaluation_plots.py
+|-- requirements.txt
+`-- Dockerfile
 ```
 
-## Setup Instructions
+## Dataset dan File Penting
 
-### Prerequisites
-- Python 3.10+
-- MLflow server running (for experiment tracking)
+Raw:
 
-### Installation
-
-1. **Create virtual environment**:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # Linux/Mac
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Configure MLflow**:
-   ```bash
-   export MLFLOW_TRACKING_URI=http://localhost:5000
-   ```
-
-4. **Start Jupyter**:
-   ```bash
-   jupyter notebook
-   ```
-
-## Feature Engineering
-
-### RFM Features
-- **Recency**: Days since last purchase
-- **Frequency**: Number of purchases
-- **Monetary**: Total spending
-
-### Usage Metrics
-- `usage_7d_data_mb`: Data consumption (last 7 days)
-- `usage_7d_voice_min`: Voice minutes used
-- `usage_7d_sms`: SMS count
-
-### ARPU Buckets
-- Low: <50K IDR/month
-- Medium: 50K-100K
-- High: 100K-200K
-- Premium: >200K
-
-### Churn Score
-Predicted probability of churn using RandomForest on behavioral features.
-
-## Model Training
-
-### 1. Segmentation (K-Means)
-```bash
-python scripts/train_segmentation.py
+```text
+ml/data/raw/Telco_customer_churn.xlsx
 ```
 
-**Output**: User segment labels (0-4)
+Processed/features:
 
-**Target**: Silhouette score >0.6
-
-### 2. Collaborative Filtering (LightFM)
-```bash
-python scripts/train_collaborative.py
+```text
+ml/data/processed/telco_customer_churn_clean.csv
+ml/data/features/telco_user_profile_features.csv
+ml/data/features/telco_training_dataset_with_targets.csv
+ml/data/features/telco_synthetic_transactions.csv
+ml/data/features/telco_synthetic_events.csv
 ```
 
-**Output**: User/item embeddings for candidate generation
+Artifact model aktif:
 
-**Target**: Precision@50 >0.7
-
-### 3. Ranking (XGBoost)
-```bash
-python scripts/train_ranker.py
+```text
+ml/models/kaggle_rf/kaggle_rf_recommender.pkl
+ml/models/kaggle_rf/metadata.json
 ```
 
-**Output**: Pairwise ranking model
+## Fitur Input Model
 
-**Target**: NDCG@5 ≥0.75, MAP@5 ≥0.70
+Model menggunakan fitur perilaku dan hasil rekayasa fitur seperti:
 
-### 4. Full Pipeline Evaluation
-```bash
-python scripts/evaluate_models.py
-```
+- `plan_type`
+- `device_brand`
+- `avg_data_usage_gb`
+- `pct_video_usage`
+- `avg_call_duration`
+- `sms_freq`
+- `monthly_spend`
+- `topup_freq`
+- `travel_score`
+- `complaint_count`
+- fitur turunan seperti loyalty, ARPU, dan intensitas penggunaan
 
-## Evaluation Metrics
+## Alur Retraining Lokal
 
-### Offline Metrics
+Jalankan dari root atau folder `ml` sesuai kebutuhan.
 
-| Metric | Target | Purpose |
-|--------|--------|---------|
-| ROC-AUC | ≥0.90 | Per-segment classification |
-| NDCG@5 | ≥0.75 | Ranking quality (top-5) |
-| MAP@5 | ≥0.70 | Precision at top-5 |
-| Coverage | ≥80% | Catalog diversity |
-| Cold-start Hit Rate | ≥60% | New user performance |
-
-### Online Metrics (A/B Test)
-
-| Metric | Target |
-|--------|--------|
-| CTR Uplift | ≥10% |
-| Conversion Uplift | ≥5% |
-| ARPU Increase | ≥3% |
-
-## MLflow Integration
-
-All experiments logged to MLflow:
-- Hyperparameters
-- Training metrics
-- Model artifacts
-- Feature importance
-
-Access MLflow UI: http://localhost:5000
-
-## Experiment Tracking
-
-### Best Practices
-1. Always set experiment name: `mlflow.set_experiment("name")`
-2. Log all hyperparameters: `mlflow.log_param()`
-3. Log evaluation metrics: `mlflow.log_metric()`
-4. Save model artifacts: `mlflow.sklearn.log_model()`
-5. Tag runs appropriately: `mlflow.set_tag()`
-
-## Model Deployment
-
-Trained models saved to MLflow Model Registry:
-```python
-# Register model
-mlflow.register_model(
-    f"runs:/{run_id}/model",
-    "telco_recommender_ranker"
-)
-
-# Promote to production
-client.transition_model_version_stage(
-    name="telco_recommender_ranker",
-    version=3,
-    stage="Production"
-)
-```
-
-## Retraining Schedule
-
-- **Daily**: Feature recalculation (Airflow DAG)
-- **Weekly**: Model retraining (if drift detected)
-- **Monthly**: Full pipeline re-evaluation
-
-## Data Requirements
-
-### Minimum Dataset Size
-- Users: ≥10K
-- Products: ≥50
-- Transactions: ≥100K
-- Events: ≥500K
-
-### Data Quality Checks
-- Missing values: <5%
-- Duplicate transactions: 0%
-- Invalid product IDs: 0%
-- Date range coverage: ≥6 months
-
-## Status
-
-🚧 **Under Development** - Sprint 2-4 implementation in progress
-
-Waiting for:
-- [ ] Historical transaction dataset
-- [ ] Product catalog data
-- [ ] User interaction events
-
-See `../IMPLEMENTATION_FLOW.md` for detailed implementation roadmap.
-
-## Quick Start (Once Data Available)
+### 1. Install dependency
 
 ```bash
-# 1. EDA
-jupyter notebook notebooks/01_eda.ipynb
-
-# 2. Feature engineering
-jupyter notebook notebooks/02_feature_engineering.ipynb
-
-# 3. Train models
-python scripts/train_segmentation.py
-python scripts/train_collaborative.py
-python scripts/train_ranker.py
-
-# 4. Evaluate
-python scripts/evaluate_models.py
+cd ml
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
 ```
+
+### 2. Preprocessing dataset
+
+```bash
+python scripts/preprocess_telco_kaggle.py
+```
+
+### 3. Bangun target rekomendasi
+
+```bash
+python scripts/build_telco_recommendation_targets.py
+```
+
+### 4. Generate data sintetis
+
+```bash
+python scripts/generate_telco_synthetic_behavior.py
+```
+
+### 5. Retraining model
+
+Gunakan notebook:
+
+```text
+ml/notebook/kaggle_rf_retraining.ipynb
+```
+
+### 6. Generate plot evaluasi
+
+```bash
+python scripts/generate_rf_evaluation_plots.py
+```
+
+## Jupyter Via Docker
+
+Dari root project:
+
+```bash
+docker compose -f compose.dev.yaml up -d ml
+```
+
+Buka:
+
+```text
+http://localhost:8888
+```
+
+## MLflow
+
+MLflow UI:
+
+```text
+http://localhost:5000
+```
+
+Untuk development saat ini, artifact RF aktif juga disimpan langsung di folder `ml/models/kaggle_rf/` supaya backend bisa membacanya lewat volume Docker.
+
+## Catatan Untuk Jurnal
+
+Deskripsi yang sesuai dengan kondisi project:
+
+- Sistem rekomendasi produk telekomunikasi berbasis web.
+- Frontend menggunakan React.js.
+- Backend menggunakan FastAPI.
+- Database menggunakan PostgreSQL.
+- Model rekomendasi menggunakan Random Forest.
+- Dataset utama Telco Customer Churn sebanyak 7.043 pelanggan.
+- Dataset diperkaya dengan fitur perilaku dan label rekomendasi berbasis aturan bisnis.
+- Aplikasi menyediakan dashboard pengguna dan dashboard admin.

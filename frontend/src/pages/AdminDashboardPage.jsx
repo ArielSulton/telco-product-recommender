@@ -5,8 +5,57 @@ import { Navigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import EmptyState from '../components/EmptyState'
-import { Users, TrendingUp, Package, Edit, Trash2, Plus, Save, RefreshCw, DollarSign, AlertTriangle, BookOpen } from 'lucide-react'
+import { Users, TrendingUp, Package, Edit, Trash2, Plus, Save, RefreshCw, DollarSign, AlertTriangle, BookOpen, MessageSquare, CheckCircle } from 'lucide-react'
 import api from '../services/api'
+
+const emptyProductForm = {
+  name: '',
+  price: '',
+  quota: '',
+  benefit: '',
+  recommendationCategory: '',
+  tags: '',
+  includeRecommendation: true,
+}
+
+const getErrorMessage = (error) => {
+  return error.response?.data?.detail || error.message || 'Unknown error'
+}
+
+const parseTags = (value) => {
+  return value
+    .split(',')
+    .map(tag => tag.trim())
+    .filter(Boolean)
+}
+
+const complaintCategoryLabels = {
+  jaringan: 'Jaringan',
+  harga_paket: 'Harga Paket',
+  kuota: 'Kuota',
+  pembelian: 'Pembelian',
+  layanan: 'Layanan',
+  lainnya: 'Lainnya',
+}
+
+const complaintStatusLabels = {
+  open: 'Open',
+  reviewed: 'Reviewed',
+  resolved: 'Resolved',
+}
+
+const mapProductToPackage = (product) => ({
+  id: product.product_id,
+  name: product.product_name,
+  benefit: product.benefit,
+  price: product.price,
+  quota: Math.round((product.quota_data_mb || 0) / 1024),
+  product_id: product.product_id,
+  quota_mb: product.quota_data_mb,
+  recommendationCategory: product.kategori_rekomendasi || '',
+  tags: product.tags || [],
+  includeRecommendation: product.ikut_rekomendasi !== false,
+})
 
 const AdminDashboardPage = () => {
   const { user } = useAuth()
@@ -24,6 +73,8 @@ const AdminDashboardPage = () => {
   // User recommendations data from API
   const [recommendations, setRecommendations] = useState([])
   const [loadingRecommendations, setLoadingRecommendations] = useState(true)
+  const [complaints, setComplaints] = useState([])
+  const [loadingComplaints, setLoadingComplaints] = useState(true)
 
   // Products data from API
   const [packages, setPackages] = useState([])
@@ -31,12 +82,7 @@ const AdminDashboardPage = () => {
   const [syncing, setSyncing] = useState(false)
 
   const [editingId, setEditingId] = useState(null)
-  const [formData, setFormData] = useState({
-    name: '',
-    price: '',
-    quota: '',
-    benefit: '',
-  })
+  const [formData, setFormData] = useState(emptyProductForm)
 
   // Fetch user recommendations
   const fetchUserRecommendations = useCallback(async () => {
@@ -52,6 +98,19 @@ const AdminDashboardPage = () => {
     }
   }, [])
 
+  const fetchComplaints = useCallback(async () => {
+    setLoadingComplaints(true)
+    try {
+      const response = await api.get('/admin/complaints?limit=10')
+      setComplaints(response.data || [])
+    } catch (error) {
+      console.error('Failed to fetch complaints:', error)
+      setComplaints([])
+    } finally {
+      setLoadingComplaints(false)
+    }
+  }, [])
+
   // Fetch products and stats from API
   const fetchProductsAndStats = useCallback(async () => {
     setLoading(true)
@@ -61,15 +120,7 @@ const AdminDashboardPage = () => {
       const products = productsResponse.data || []
 
       // Map to frontend format
-      const mappedProducts = products.map(p => ({
-        id: p.product_id,
-        name: p.product_name,
-        benefit: p.benefit,
-        price: p.price,
-        quota: Math.round(p.quota_data_mb / 1024), // Convert MB to GB
-        product_id: p.product_id,
-        quota_mb: p.quota_data_mb
-      }))
+      const mappedProducts = products.map(mapProductToPackage)
 
       setPackages(mappedProducts)
 
@@ -79,6 +130,7 @@ const AdminDashboardPage = () => {
 
       // Fetch user recommendations
       await fetchUserRecommendations()
+      await fetchComplaints()
 
     } catch (error) {
       console.error('Failed to fetch admin data:', error)
@@ -86,7 +138,7 @@ const AdminDashboardPage = () => {
     } finally {
       setLoading(false)
     }
-  }, [toast, fetchUserRecommendations])
+  }, [toast, fetchUserRecommendations, fetchComplaints])
 
   // Fetch products and stats on mount
   useEffect(() => {
@@ -114,46 +166,67 @@ const AdminDashboardPage = () => {
 
   // Handle form input
   const handleInputChange = (e) => {
-    const { name, value } = e.target
+    const { name, value, checked, type } = e.target
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: type === 'checkbox' ? checked : value
     }))
+  }
+
+  const buildProductPayload = () => {
+    const quotaGb = Number(formData.quota)
+    const tags = parseTags(formData.tags)
+
+    return {
+      product_name: formData.name.trim(),
+      product_family: formData.recommendationCategory,
+      quota_data_mb: Math.round(quotaGb * 1024),
+      validity_days: 30,
+      price: parseInt(formData.price, 10),
+      kategori_rekomendasi: formData.recommendationCategory,
+      tags,
+      ikut_rekomendasi: formData.includeRecommendation,
+      benefit: formData.benefit.trim() || undefined,
+      metadata: {
+        benefit: formData.benefit.trim() || undefined,
+      },
+    }
+  }
+
+  const validateProductForm = () => {
+    if (!formData.name.trim() || !formData.price || !formData.quota || !formData.recommendationCategory) {
+      toast.error('Mohon isi nama, harga, kuota, dan kategori rekomendasi')
+      return false
+    }
+
+    if (Number(formData.price) <= 0 || Number(formData.quota) < 0) {
+      toast.error('Harga harus lebih dari 0 dan kuota tidak boleh negatif')
+      return false
+    }
+
+    return true
   }
 
   // Add new package
   const handleAddPackage = async () => {
     // Validate form
-    if (!formData.name || !formData.price || !formData.quota) {
-      toast.error('Mohon isi semua field yang diperlukan')
+    if (!validateProductForm()) {
       return
     }
 
     try {
-      const response = await api.post('/admin/products', {
-        product_name: formData.name,
-        product_family: 'Custom Package',
-        quota_data_mb: parseInt(formData.quota),
-        validity_days: 30,
-        price: parseInt(formData.price)
-      })
+      const response = await api.post('/admin/products', buildProductPayload())
 
       // Add to local state
-      const newPackage = {
-        id: response.data.product_id,
-        name: response.data.product_name,
-        price: response.data.price,
-        quota: response.data.quota_data_mb,
-        benefit: response.data.benefit
-      }
+      const newPackage = mapProductToPackage(response.data)
       setPackages([...packages, newPackage])
 
       // Reset form
-      setFormData({ name: '', price: '', quota: '', benefit: '' })
+      setFormData(emptyProductForm)
       toast.success('Produk berhasil ditambahkan!')
     } catch (error) {
       console.error('Failed to add product:', error)
-      toast.error('Gagal menambahkan produk: ' + (error.response?.data?.detail || 'Unknown error'))
+      toast.error('Gagal menambahkan produk: ' + getErrorMessage(error))
     }
   }
 
@@ -164,7 +237,10 @@ const AdminDashboardPage = () => {
       name: pkg.name,
       price: pkg.price.toString(),
       quota: pkg.quota.toString(),
-      benefit: pkg.benefit,
+      benefit: pkg.benefit || '',
+      recommendationCategory: pkg.recommendationCategory || '',
+      tags: (pkg.tags || []).join(', '),
+      includeRecommendation: pkg.includeRecommendation,
     })
   }
 
@@ -173,38 +249,27 @@ const AdminDashboardPage = () => {
     if (!editingId) return
 
     // Validate form
-    if (!formData.name || !formData.price || !formData.quota) {
-      toast.error('Mohon isi semua field yang diperlukan')
+    if (!validateProductForm()) {
       return
     }
 
     try {
-      const response = await api.put(`/admin/products/${editingId}`, {
-        product_name: formData.name,
-        quota_data_mb: parseInt(formData.quota),
-        price: parseInt(formData.price)
-      })
+      const response = await api.put(`/admin/products/${editingId}`, buildProductPayload())
 
       // Update local state
       setPackages(packages.map(pkg =>
         pkg.id === editingId
-          ? {
-              id: response.data.product_id,
-              name: response.data.product_name,
-              price: response.data.price,
-              quota: response.data.quota_data_mb,
-              benefit: response.data.benefit
-            }
+          ? mapProductToPackage(response.data)
           : pkg
       ))
 
       // Reset form
       setEditingId(null)
-      setFormData({ name: '', price: '', quota: '', benefit: '' })
+      setFormData(emptyProductForm)
       toast.success('Produk berhasil diupdate!')
     } catch (error) {
       console.error('Failed to update product:', error)
-      toast.error('Gagal mengupdate produk: ' + (error.response?.data?.detail || 'Unknown error'))
+      toast.error('Gagal mengupdate produk: ' + getErrorMessage(error))
     }
   }
 
@@ -219,7 +284,7 @@ const AdminDashboardPage = () => {
         toast.success('Produk berhasil dihapus!')
       } catch (error) {
         console.error('Failed to delete product:', error)
-        const errorMsg = error.response?.data?.detail || 'Unknown error'
+        const errorMsg = getErrorMessage(error)
 
         if (errorMsg.includes('purchase')) {
           toast.error('Tidak bisa menghapus produk yang sudah dibeli user')
@@ -227,6 +292,21 @@ const AdminDashboardPage = () => {
           toast.error('Gagal menghapus produk: ' + errorMsg)
         }
       }
+    }
+  }
+
+  const handleComplaintStatusUpdate = async (id, nextStatus) => {
+    try {
+      const response = await api.put(`/admin/complaints/${id}`, {
+        status: nextStatus,
+      })
+      setComplaints(complaints.map(complaint =>
+        complaint.id === id ? response.data : complaint
+      ))
+      toast.success('Status keluhan diperbarui')
+    } catch (error) {
+      console.error('Failed to update complaint:', error)
+      toast.error('Gagal memperbarui status keluhan')
     }
   }
 
@@ -333,7 +413,7 @@ const AdminDashboardPage = () => {
                     <tr className="border-b-2 border-gray-200">
                       <th className="px-4 py-3 text-left font-bold text-gray-900">Username</th>
                       <th className="px-4 py-3 text-left font-bold text-gray-900">Phone</th>
-                      <th className="px-4 py-3 text-left font-bold text-gray-900">Segment</th>
+                      <th className="px-4 py-3 text-left font-bold text-gray-900">Profil Rekomendasi</th>
                       <th className="px-4 py-3 text-center font-bold text-gray-900">Purchases</th>
                       <th className="px-4 py-3 text-left font-bold text-gray-900">Recommended</th>
                     </tr>
@@ -344,15 +424,118 @@ const AdminDashboardPage = () => {
                         <td className="px-4 py-3 text-gray-900 font-medium">{rec.username}</td>
                         <td className="px-4 py-3 text-gray-600 font-mono text-sm">{rec.phone}</td>
                         <td className="px-4 py-3">
-                          <span className="px-2 py-1 bg-cyan-100 text-cyan-800 rounded-full text-xs font-semibold">
-                            {rec.segment_name}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm font-semibold text-gray-900">
+                              {rec.recommendation_class || '-'}
+                            </span>
+                            <span className="text-xs text-green-700">{rec.recommendation_source}</span>
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-center text-gray-900">{rec.total_purchases}</td>
                         <td className="px-4 py-3">
                           <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-sm font-medium">
                             {rec.recommended_product}
                           </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* User Complaints Table */}
+        <section className="mb-8">
+          <div className="card">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                <MessageSquare className="w-6 h-6 text-cyan-600" />
+                Keluhan Pengguna
+              </h2>
+              <button
+                onClick={fetchComplaints}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors"
+              >
+                <RefreshCw className="w-5 h-5" />
+                Refresh
+              </button>
+            </div>
+
+            {loadingComplaints ? (
+              <div className="animate-pulse space-y-3">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} className="h-12 bg-gray-200 rounded"></div>
+                ))}
+              </div>
+            ) : complaints.length === 0 ? (
+              <EmptyState
+                type="analytics"
+                title="Belum Ada Keluhan"
+                description="Keluhan pengguna akan muncul di sini dan menjadi sinyal tambahan untuk rekomendasi retensi."
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b-2 border-gray-200">
+                      <th className="px-4 py-3 text-left font-bold text-gray-900">User</th>
+                      <th className="px-4 py-3 text-left font-bold text-gray-900">Kategori</th>
+                      <th className="px-4 py-3 text-left font-bold text-gray-900">Keluhan</th>
+                      <th className="px-4 py-3 text-left font-bold text-gray-900">Status</th>
+                      <th className="px-4 py-3 text-left font-bold text-gray-900">Tanggal</th>
+                      <th className="px-4 py-3 text-center font-bold text-gray-900">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {complaints.map((complaint, index) => (
+                      <tr key={complaint.id} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-gray-900">{complaint.username || '-'}</span>
+                            <span className="text-xs text-gray-500 font-mono">{complaint.phone || '-'}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-gray-900">
+                          {complaintCategoryLabels[complaint.category] || complaint.category}
+                        </td>
+                        <td className="px-4 py-3 text-gray-700 max-w-md">
+                          <p className="line-clamp-2">{complaint.message}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                            complaint.status === 'resolved'
+                              ? 'bg-green-100 text-green-800'
+                              : complaint.status === 'reviewed'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {complaintStatusLabels[complaint.status] || complaint.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 text-sm">
+                          {new Date(complaint.created_at).toLocaleString('id-ID')}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="inline-flex gap-2">
+                            <button
+                              onClick={() => handleComplaintStatusUpdate(complaint.id, 'reviewed')}
+                              disabled={complaint.status !== 'open'}
+                              className="inline-flex items-center gap-1 px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                              Review
+                            </button>
+                            <button
+                              onClick={() => handleComplaintStatusUpdate(complaint.id, 'resolved')}
+                              disabled={complaint.status === 'resolved'}
+                              className="inline-flex items-center gap-1 px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                              Selesai
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -395,6 +578,7 @@ const AdminDashboardPage = () => {
                       <th className="px-4 py-3 text-left font-bold text-gray-900">No</th>
                       <th className="px-4 py-3 text-left font-bold text-gray-900">Data Packages Name</th>
                       <th className="px-4 py-3 text-left font-bold text-gray-900">Benefit</th>
+                      <th className="px-4 py-3 text-left font-bold text-gray-900">Rekomendasi</th>
                       <th className="px-4 py-3 text-center font-bold text-gray-900">Actions</th>
                     </tr>
                   </thead>
@@ -404,6 +588,16 @@ const AdminDashboardPage = () => {
                         <td className="px-4 py-3 text-gray-900">{index + 1}.</td>
                         <td className="px-4 py-3 text-gray-900">{pkg.name}</td>
                         <td className="px-4 py-3 text-gray-900">{pkg.benefit}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm font-semibold text-gray-900">
+                              {pkg.recommendationCategory || '-'}
+                            </span>
+                            <span className={`text-xs font-semibold ${pkg.includeRecommendation ? 'text-green-700' : 'text-gray-500'}`}>
+                              {pkg.includeRecommendation ? 'Ikut rekomendasi' : 'Nonaktif rekomendasi'}
+                            </span>
+                          </div>
+                        </td>
                         <td className="px-4 py-3 text-center">
                           <button
                             onClick={() => handleEdit(pkg)}
@@ -471,6 +665,24 @@ const AdminDashboardPage = () => {
                 </div>
 
                 <div>
+                  <label className="block text-gray-700 font-semibold mb-2">Kategori Rekomendasi</label>
+                  <select
+                    name="recommendationCategory"
+                    value={formData.recommendationCategory}
+                    onChange={handleInputChange}
+                    className="input-field"
+                  >
+                    <option value="">Pilih kategori</option>
+                    <option value="data">Data</option>
+                    <option value="combo">Combo</option>
+                    <option value="voice">Voice</option>
+                    <option value="starter">Starter</option>
+                    <option value="premium">Premium</option>
+                    <option value="retention">Retention</option>
+                  </select>
+                </div>
+
+                <div>
                   <label className="block text-gray-700 font-semibold mb-2">Benefit Tambahan</label>
                   <input
                     type="text"
@@ -480,6 +692,32 @@ const AdminDashboardPage = () => {
                     className="input-field"
                     placeholder="e.g., + Chat, + Youtube"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2">Tags Rekomendasi</label>
+                  <input
+                    type="text"
+                    name="tags"
+                    value={formData.tags}
+                    onChange={handleInputChange}
+                    className="input-field"
+                    placeholder="e.g., youth, budget, streaming"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 pt-8">
+                  <input
+                    id="includeRecommendation"
+                    type="checkbox"
+                    name="includeRecommendation"
+                    checked={formData.includeRecommendation}
+                    onChange={handleInputChange}
+                    className="w-5 h-5 accent-cyan-600"
+                  />
+                  <label htmlFor="includeRecommendation" className="text-gray-700 font-semibold">
+                    Ikut rekomendasi
+                  </label>
                 </div>
               </div>
 
@@ -496,7 +734,7 @@ const AdminDashboardPage = () => {
                     <button
                       onClick={() => {
                         setEditingId(null)
-                        setFormData({ name: '', price: '', quota: '', benefit: '' })
+                        setFormData(emptyProductForm)
                       }}
                       className="btn-secondary active-press"
                     >
@@ -526,10 +764,10 @@ const AdminDashboardPage = () => {
               <div className="flex items-start gap-3">
                 <AlertTriangle className="w-8 h-8 text-yellow-600 flex-shrink-0 mt-1" />
                 <div className="flex-1">
-                  <h3 className="text-lg font-bold text-yellow-900 mb-2">Fitur dalam Pengembangan</h3>
+                  <h3 className="text-lg font-bold text-yellow-900 mb-2">Model Operations</h3>
                   <p className="text-yellow-800">
-                    Integrasi dengan Airflow dan MLflow masih dalam tahap pengembangan.
-                    Untuk saat ini, gunakan Airflow UI dan MLflow UI langsung untuk monitoring model.
+                    Model Random Forest v2 aktif digunakan untuk rekomendasi.
+                    Monitoring pipeline dan eksperimen model tersedia melalui layanan pendukung berikut.
                   </p>
                   <div className="mt-4 space-y-2 text-sm">
                     <p className="text-yellow-700">
@@ -537,6 +775,9 @@ const AdminDashboardPage = () => {
                     </p>
                     <p className="text-yellow-700">
                       <span className="font-semibold">MLflow UI:</span> http://localhost:5000
+                    </p>
+                    <p className="text-yellow-800">
+                      <span className="font-semibold">Status:</span> Pengelolaan retraining dari dashboard admin belum tersedia.
                     </p>
                   </div>
                 </div>
@@ -549,16 +790,16 @@ const AdminDashboardPage = () => {
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-gray-700">Current Model:</span>
-                    <span className="font-semibold text-gray-900">K-Means Segmentation</span>
+                    <span className="font-semibold text-gray-900">Random Forest v2</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-700">Last Training:</span>
-                    <span className="font-semibold text-gray-900">Weekly (Sunday 2 AM)</span>
+                    <span className="text-gray-700">Training Source:</span>
+                    <span className="font-semibold text-gray-900">Kaggle Telco Churn</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-700">Status:</span>
                     <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-semibold">
-                      Production
+                      Active
                     </span>
                   </div>
                 </div>
@@ -586,10 +827,11 @@ const AdminDashboardPage = () => {
                 Model Information
               </h3>
               <div className="space-y-2 text-sm text-blue-800">
-                <p><span className="font-semibold">Segmentation:</span> K-Means clustering with 5 segments</p>
-                <p><span className="font-semibold">Collaborative Filtering:</span> LightFM with WARP loss</p>
-                <p><span className="font-semibold">Ranking:</span> XGBoost pairwise ranking model</p>
-                <p><span className="font-semibold">Drift Detection:</span> PSI threshold ≥ 0.2 triggers retraining</p>
+                <p><span className="font-semibold">Algorithm:</span> Random Forest classifier</p>
+                <p><span className="font-semibold">Input Features:</span> 21 behavioral and engineered features</p>
+                <p><span className="font-semibold">Recommendation Classes:</span> 6 package categories</p>
+                <p><span className="font-semibold">Evaluation:</span> 86.8% accuracy and 99.57% top-3 accuracy</p>
+                <p><span className="font-semibold">Product Matching:</span> Active products ranked using recommendation category and tags</p>
               </div>
             </div>
           </div>

@@ -64,9 +64,9 @@ const AboutPage = () => {
               usage patterns, preferences, and behavior.
             </p>
             <p className="text-lg text-gray-700 text-center">
-              Using state-of-the-art machine learning algorithms including
-              K-Means segmentation, LightFM collaborative filtering, and XGBoost
-              ranking, we deliver recommendations that truly match your needs.
+              Using a Random Forest recommendation model trained on behavioral
+              customer features, we match predicted package categories with
+              active products in our catalog.
             </p>
           </div>
         </section>
@@ -107,12 +107,12 @@ const AboutPage = () => {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-gray-900 mb-2">
-                    User Segmentation
+                    Behavioral Profile
                   </h3>
                   <p className="text-gray-600">
-                    We analyze your usage patterns using K-Means clustering to
-                    identify your user segment based on RFM (Recency, Frequency,
-                    Monetary) metrics, ARPU, and usage behavior.
+                    We analyze customer usage and profile signals, including
+                    data usage, communication activity, spending, top-up
+                    behavior, and churn-related indicators.
                   </p>
                 </div>
               </div>
@@ -125,12 +125,12 @@ const AboutPage = () => {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-gray-900 mb-2">
-                    Candidate Generation
+                    Recommendation Classification
                   </h3>
                   <p className="text-gray-600">
-                    Using LightFM collaborative filtering and segment-based
-                    popularity, we generate a pool of relevant product candidates
-                    that match your profile.
+                    A Random Forest model processes 21 behavioral and engineered
+                    features to predict the most relevant recommendation
+                    categories for each customer.
                   </p>
                 </div>
               </div>
@@ -143,12 +143,12 @@ const AboutPage = () => {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-gray-900 mb-2">
-                    Intelligent Ranking
+                    Product Matching
                   </h3>
                   <p className="text-gray-600">
-                    Our XGBoost ranking model scores and ranks candidates based on
-                    multiple features to predict which packages you&apos;re most likely
-                    to prefer.
+                    Predicted categories are matched to active catalog products
+                    using recommendation category, product tags, quota, price,
+                    and validity information.
                   </p>
                 </div>
               </div>
@@ -164,9 +164,9 @@ const AboutPage = () => {
                     Personalized Results
                   </h3>
                   <p className="text-gray-600">
-                    We apply MMR diversification to ensure variety in
-                    recommendations and provide SHAP-based explanations for
-                    transparency.
+                    Recommended products are presented with their key package
+                    details so customers can review an offer and continue to
+                    purchase history tracking.
                   </p>
                 </div>
               </div>
@@ -186,8 +186,8 @@ const AboutPage = () => {
                 'PostgreSQL',
                 'Redis',
                 'scikit-learn',
-                'LightFM',
-                'XGBoost',
+                'Random Forest',
+                'Vite',
                 'MLflow',
                 'Apache Airflow',
                 'Docker',

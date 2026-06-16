@@ -5,14 +5,20 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 import psycopg2
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import Json, RealDictCursor
 from datetime import datetime
 import requests
 import os
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.auth import get_current_user
+from app.api.deps import RedisClient
 from app.db.models.user import User
 from app.db.database import get_db_connection
+from app.db.session import get_db
+from app.ml.rf_recommender import generate_rf_recommendations
+from app.services.cache_invalidation import invalidate_product_recommendation_cache
+from app.services.recommendation_service import get_user_features
 
 router = APIRouter()
 
@@ -31,10 +37,17 @@ class ProductResponse(BaseModel):
     """Product response model"""
     product_id: str
     product_name: str
-    product_family: str
+    product_family: Optional[str]
     quota_data_mb: Optional[int]
+    quota_voice_min: Optional[int] = 0
+    quota_sms: Optional[int] = 0
     validity_days: Optional[int]
     price: int
+    kategori_rekomendasi: Optional[str] = None
+    tags: Optional[List[str]] = None
+    ikut_rekomendasi: bool = True
+    is_active: bool = True
+    metadata: Dict[str, Any] = Field(default_factory=dict)
     benefit: Optional[str] = None
 
 
@@ -43,8 +56,15 @@ class ProductCreateRequest(BaseModel):
     product_name: str = Field(..., description="Product name")
     product_family: str = Field(..., description="Product family/category")
     quota_data_mb: int = Field(..., description="Data quota in MB")
+    quota_voice_min: int = Field(default=0, description="Voice quota in minutes")
+    quota_sms: int = Field(default=0, description="SMS quota count")
     validity_days: int = Field(default=30, description="Validity period in days")
     price: int = Field(..., description="Price in IDR")
+    kategori_rekomendasi: Optional[str] = Field(None, description="Recommendation category")
+    tags: Optional[List[str]] = Field(None, description="Product tags")
+    ikut_rekomendasi: bool = Field(default=True, description="Whether recommender can use this product")
+    is_active: bool = Field(default=True, description="Product availability")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional product metadata")
     benefit: Optional[str] = Field(None, description="Additional benefit description")
 
 
@@ -53,8 +73,15 @@ class ProductUpdateRequest(BaseModel):
     product_name: Optional[str] = None
     product_family: Optional[str] = None
     quota_data_mb: Optional[int] = None
+    quota_voice_min: Optional[int] = None
+    quota_sms: Optional[int] = None
     validity_days: Optional[int] = None
     price: Optional[int] = None
+    kategori_rekomendasi: Optional[str] = None
+    tags: Optional[List[str]] = None
+    ikut_rekomendasi: Optional[bool] = None
+    is_active: Optional[bool] = None
+    metadata: Optional[Dict[str, Any]] = None
     benefit: Optional[str] = None
 
 
@@ -72,7 +99,8 @@ class UserRecommendationItem(BaseModel):
     user_id: str
     username: str
     phone: str
-    segment_name: str
+    recommendation_class: Optional[str] = None
+    recommendation_source: str = "Random Forest v2"
     total_purchases: int
     last_purchase: Optional[str]
     recommended_product: Optional[str]
@@ -89,6 +117,58 @@ def check_admin_role(current_user: User):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
         )
+
+
+async def invalidate_recommendation_caches(product_id: Optional[str] = None) -> None:
+    """
+    Clear recommendation-related caches after product catalog changes.
+
+    Product updates can change candidate selection for many users at once,
+    so we invalidate broad recommendation patterns instead of per-user keys.
+    """
+    try:
+        redis_client = await RedisClient.get_instance()
+        if not redis_client:
+            return
+
+        await invalidate_product_recommendation_cache(redis_client, product_id)
+    except Exception:
+        # Cache invalidation should not block admin product management.
+        return
+
+
+def build_product_metadata(
+    metadata: Optional[Dict[str, Any]],
+    benefit: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Merge explicit metadata with legacy benefit field."""
+    merged = dict(metadata or {})
+    if benefit is not None:
+        merged["benefit"] = benefit
+    return merged
+
+
+def derive_product_benefit(product: Dict[str, Any]) -> str:
+    """Return stored benefit metadata or derive it from quota and validity."""
+    metadata = product.get("metadata") or {}
+    if metadata.get("benefit"):
+        return metadata["benefit"]
+
+    quota_data_mb = product.get("quota_data_mb") or 0
+    quota_gb = quota_data_mb / 1024 if quota_data_mb else 0
+    benefit = f"{quota_gb:.0f}GB" if quota_gb >= 1 else f"{quota_data_mb}MB"
+
+    if product.get("validity_days"):
+        benefit += f" - {product['validity_days']} Hari"
+
+    return benefit
+
+
+def serialize_product(product: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize product rows for admin API responses."""
+    product["metadata"] = product.get("metadata") or {}
+    product["benefit"] = derive_product_benefit(product)
+    return product
 
 
 # ==============================================
@@ -117,25 +197,21 @@ async def get_all_products(
                 product_name,
                 product_family,
                 quota_data_mb,
+                quota_voice_min,
+                quota_sms,
                 validity_days,
-                price
+                price,
+                kategori_rekomendasi,
+                tags,
+                ikut_rekomendasi,
+                is_active,
+                metadata
             FROM products
             ORDER BY price ASC
         """)
 
         products = cursor.fetchall()
-
-        # Add benefit field (derived from product attributes)
-        for product in products:
-            quota_gb = product['quota_data_mb'] / 1024 if product['quota_data_mb'] else 0
-            benefit = f"{quota_gb:.0f}GB" if quota_gb >= 1 else f"{product['quota_data_mb']}MB"
-
-            if product['validity_days']:
-                benefit += f" - {product['validity_days']} Hari"
-
-            product['benefit'] = benefit
-
-        return products
+        return [serialize_product(product) for product in products]
 
     finally:
         cursor.close()
@@ -180,7 +256,7 @@ async def get_admin_stats(
         usage_stats = cursor.fetchone()
 
         # Active products count
-        cursor.execute("SELECT COUNT(*) as count FROM products")
+        cursor.execute("SELECT COUNT(*) as count FROM products WHERE is_active = TRUE")
         active_products = cursor.fetchone()['count']
 
         return {
@@ -196,25 +272,16 @@ async def get_admin_stats(
         conn.close()
 
 
-# Segment name mapping
-SEGMENT_NAMES = {
-    0: "Budget-Conscious",
-    1: "Premium User",
-    2: "Moderate User",
-    3: "Light User",
-    4: "Heavy User"
-}
-
-
 @router.get("/user-recommendations", response_model=List[UserRecommendationItem])
 async def get_user_recommendations(
     limit: int = 10,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get user activity and recommendation overview for admin dashboard.
 
-    Shows recent users with their segments and purchase history.
+    Shows recent users with RF v2 recommendation monitoring and purchase history.
     Requires admin role.
     """
     check_admin_role(current_user)
@@ -223,28 +290,18 @@ async def get_user_recommendations(
     cursor = conn.cursor(cursor_factory=RealDictCursor)
 
     try:
-        # Get users with their segments and purchase info
+        # Get users with purchase info. Recommendation output is loaded from RF v2 below.
         cursor.execute("""
             SELECT
                 u.id as user_id,
                 u.name as username,
                 u.phone,
-                COALESCE(ml.segment_id, 0) as segment_id,
                 COUNT(p.id) as total_purchases,
-                MAX(p.purchase_date) as last_purchase,
-                (
-                    SELECT pr.product_name
-                    FROM purchases p2
-                    JOIN products pr ON p2.product_id = pr.product_id
-                    WHERE p2.user_id = u.id
-                    ORDER BY p2.purchase_date DESC
-                    LIMIT 1
-                ) as last_purchased_product
+                MAX(p.purchase_date) as last_purchase
             FROM app_users u
-            LEFT JOIN users ml ON ml.user_id = u.id
             LEFT JOIN purchases p ON p.user_id = u.id
             WHERE u.role != 'admin'
-            GROUP BY u.id, u.name, u.phone, ml.segment_id
+            GROUP BY u.id, u.name, u.phone
             ORDER BY MAX(p.purchase_date) DESC NULLS LAST, u.created_at DESC
             LIMIT %s
         """, (limit,))
@@ -253,27 +310,33 @@ async def get_user_recommendations(
 
         result = []
         for user in users:
-            segment_id = user['segment_id'] or 0
-            segment_name = SEGMENT_NAMES.get(segment_id, "Unknown")
-
-            # Suggest a product based on segment
+            recommendation_class = None
             recommended = None
-            if user['total_purchases'] == 0:
-                recommended = "Paket Pemula"
-            elif segment_id == 0:
-                recommended = "Paket Hemat"
-            elif segment_id == 1:
-                recommended = "Paket Premium"
-            elif segment_id == 4:
-                recommended = "Paket Unlimited"
-            else:
-                recommended = "Paket Standard"
+            source = "Random Forest v2"
+            try:
+                features = await get_user_features(db, user["user_id"])
+                recommendations = await generate_rf_recommendations(
+                    user_id=user["user_id"],
+                    user_features=features or {},
+                    db=db,
+                    k=1,
+                    min_confidence=0.0,
+                    include_explanations=False,
+                ) if features else []
+                if recommendations:
+                    recommendation_class = recommendations[0].get("predicted_label")
+                    recommended = recommendations[0].get("product_name")
+                else:
+                    source = "Belum tersedia"
+            except Exception:
+                source = "Belum tersedia"
 
             result.append(UserRecommendationItem(
                 user_id=str(user['user_id']),
                 username=user['username'] or "Unknown",
                 phone=user['phone'][-4:].rjust(len(user['phone']), '*'),  # Mask phone
-                segment_name=segment_name,
+                recommendation_class=recommendation_class,
+                recommendation_source=source,
                 total_purchases=user['total_purchases'],
                 last_purchase=user['last_purchase'].isoformat() if user['last_purchase'] else None,
                 recommended_product=recommended
@@ -304,6 +367,7 @@ async def create_product(
     try:
         # Generate product ID
         product_id = f"PKT_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        metadata = build_product_metadata(request.metadata, request.benefit)
 
         # Insert product
         cursor.execute("""
@@ -312,30 +376,51 @@ async def create_product(
                 product_name,
                 product_family,
                 quota_data_mb,
+                quota_voice_min,
+                quota_sms,
                 validity_days,
-                price
-            ) VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING product_id, product_name, product_family, quota_data_mb, validity_days, price
+                price,
+                kategori_rekomendasi,
+                tags,
+                ikut_rekomendasi,
+                is_active,
+                metadata
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING
+                product_id,
+                product_name,
+                product_family,
+                quota_data_mb,
+                quota_voice_min,
+                quota_sms,
+                validity_days,
+                price,
+                kategori_rekomendasi,
+                tags,
+                ikut_rekomendasi,
+                is_active,
+                metadata
         """, (
             product_id,
             request.product_name,
             request.product_family,
             request.quota_data_mb,
+            request.quota_voice_min,
+            request.quota_sms,
             request.validity_days,
-            request.price
+            request.price,
+            request.kategori_rekomendasi,
+            request.tags,
+            request.ikut_rekomendasi,
+            request.is_active,
+            Json(metadata)
         ))
 
         product = cursor.fetchone()
         conn.commit()
 
-        # Add benefit field
-        quota_gb = product['quota_data_mb'] / 1024 if product['quota_data_mb'] else 0
-        benefit = f"{quota_gb:.0f}GB" if quota_gb >= 1 else f"{product['quota_data_mb']}MB"
-        if product['validity_days']:
-            benefit += f" - {product['validity_days']} Hari"
-        product['benefit'] = benefit
-
-        return product
+        await invalidate_recommendation_caches(product_id)
+        return serialize_product(product)
 
     except psycopg2.IntegrityError as e:
         conn.rollback()
@@ -391,6 +476,14 @@ async def update_product(
             update_fields.append("quota_data_mb = %s")
             update_values.append(request.quota_data_mb)
 
+        if request.quota_voice_min is not None:
+            update_fields.append("quota_voice_min = %s")
+            update_values.append(request.quota_voice_min)
+
+        if request.quota_sms is not None:
+            update_fields.append("quota_sms = %s")
+            update_values.append(request.quota_sms)
+
         if request.validity_days is not None:
             update_fields.append("validity_days = %s")
             update_values.append(request.validity_days)
@@ -398,6 +491,30 @@ async def update_product(
         if request.price is not None:
             update_fields.append("price = %s")
             update_values.append(request.price)
+
+        if request.kategori_rekomendasi is not None:
+            update_fields.append("kategori_rekomendasi = %s")
+            update_values.append(request.kategori_rekomendasi)
+
+        if request.tags is not None:
+            update_fields.append("tags = %s")
+            update_values.append(request.tags)
+
+        if request.ikut_rekomendasi is not None:
+            update_fields.append("ikut_rekomendasi = %s")
+            update_values.append(request.ikut_rekomendasi)
+
+        if request.is_active is not None:
+            update_fields.append("is_active = %s")
+            update_values.append(request.is_active)
+
+        if request.metadata is not None or request.benefit is not None:
+            merged_metadata = dict(existing.get("metadata") or {})
+            if request.metadata is not None:
+                merged_metadata.update(request.metadata)
+            merged_metadata = build_product_metadata(merged_metadata, request.benefit)
+            update_fields.append("metadata = %s")
+            update_values.append(Json(merged_metadata))
 
         if not update_fields:
             raise HTTPException(
@@ -413,21 +530,28 @@ async def update_product(
             UPDATE products
             SET {', '.join(update_fields)}
             WHERE product_id = %s
-            RETURNING product_id, product_name, product_family, quota_data_mb, validity_days, price
+            RETURNING
+                product_id,
+                product_name,
+                product_family,
+                quota_data_mb,
+                quota_voice_min,
+                quota_sms,
+                validity_days,
+                price,
+                kategori_rekomendasi,
+                tags,
+                ikut_rekomendasi,
+                is_active,
+                metadata
         """
 
         cursor.execute(query, update_values)
         product = cursor.fetchone()
         conn.commit()
 
-        # Add benefit field
-        quota_gb = product['quota_data_mb'] / 1024 if product['quota_data_mb'] else 0
-        benefit = f"{quota_gb:.0f}GB" if quota_gb >= 1 else f"{product['quota_data_mb']}MB"
-        if product['validity_days']:
-            benefit += f" - {product['validity_days']} Hari"
-        product['benefit'] = benefit
-
-        return product
+        await invalidate_recommendation_caches(product_id)
+        return serialize_product(product)
 
     finally:
         cursor.close()
@@ -478,6 +602,8 @@ async def delete_product(
         # Delete product
         cursor.execute("DELETE FROM products WHERE product_id = %s", (product_id,))
         conn.commit()
+
+        await invalidate_recommendation_caches(product_id)
 
         return {
             "message": f"Product {product_id} deleted successfully",

@@ -1,20 +1,20 @@
 -- ==============================================
--- TELCO PRODUCT RECOMMENDER - DATABASE SCHEMA
+-- TELCO PRODUCT RECOMMENDER - SKEMA DATABASE
 -- ==============================================
--- PostgreSQL 14+ initialization script
--- Created: Sprint 1 - Database Infrastructure
--- Purpose: Core tables for OLTP, feature store, and streaming data tracking
+-- Skrip inisialisasi PostgreSQL 14+
+-- Dibuat: Sprint 1 - Infrastruktur Database
+-- Tujuan: Tabel inti untuk OLTP, feature store, dan pelacakan data streaming
 -- ==============================================
 
--- Enable UUID extension
+-- Aktifkan ekstensi UUID
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ==============================================
--- CORE TABLES
+-- TABEL INTI
 -- ==============================================
 
--- Users table (customer master data)
+-- Tabel users (data master pelanggan)
 CREATE TABLE IF NOT EXISTS users (
     user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     msisdn_hash VARCHAR(64) UNIQUE NOT NULL,
@@ -26,11 +26,11 @@ CREATE TABLE IF NOT EXISTS users (
     CONSTRAINT check_segment_id CHECK (segment_id >= 0 AND segment_id < 10)
 );
 
-COMMENT ON TABLE users IS 'Customer master data with segment tracking';
-COMMENT ON COLUMN users.msisdn_hash IS 'SHA-256 hash of phone number for privacy';
-COMMENT ON COLUMN users.segment_id IS 'K-Means cluster ID (0-9)';
+COMMENT ON TABLE users IS 'Data master pelanggan dengan pelacakan segmen';
+COMMENT ON COLUMN users.msisdn_hash IS 'Hash SHA-256 dari nomor telepon untuk privasi';
+COMMENT ON COLUMN users.segment_id IS 'ID kluster K-Means (0-9)';
 
--- Products table (telco packages catalog)
+-- Tabel products (katalog paket telko)
 CREATE TABLE IF NOT EXISTS products (
     product_id VARCHAR(50) PRIMARY KEY,
     product_name VARCHAR(200) NOT NULL,
@@ -54,11 +54,11 @@ CREATE TABLE IF NOT EXISTS products (
     CONSTRAINT check_validity CHECK (validity_days > 0)
 );
 
-COMMENT ON TABLE products IS 'Telco product catalog with quotas and pricing';
-COMMENT ON COLUMN products.product_family IS 'Product category: data, voice, combo, internet';
-COMMENT ON COLUMN products.tags IS 'Array of tags for filtering: [premium, youth, family]';
+COMMENT ON TABLE products IS 'Katalog produk telko beserta kuota dan harga';
+COMMENT ON COLUMN products.product_family IS 'Kategori produk: data, voice, combo, internet';
+COMMENT ON COLUMN products.tags IS 'Array tag untuk filter: [premium, youth, family]';
 
--- Transactions table (purchase history)
+-- Tabel transactions (riwayat pembelian)
 CREATE TABLE IF NOT EXISTS transactions (
     transaction_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
@@ -72,10 +72,10 @@ CREATE TABLE IF NOT EXISTS transactions (
     CONSTRAINT check_status CHECK (status IN ('pending', 'completed', 'failed', 'refunded'))
 );
 
-COMMENT ON TABLE transactions IS 'Purchase history for collaborative filtering';
-COMMENT ON COLUMN transactions.status IS 'Transaction status: pending, completed, failed, refunded';
+COMMENT ON TABLE transactions IS 'Riwayat pembelian untuk collaborative filtering';
+COMMENT ON COLUMN transactions.status IS 'Status transaksi: pending, completed, failed, refunded';
 
--- Events table (web interactions)
+-- Tabel events (interaksi pengguna di web)
 CREATE TABLE IF NOT EXISTS events (
     event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(user_id) ON DELETE CASCADE,
@@ -90,16 +90,16 @@ CREATE TABLE IF NOT EXISTS events (
     CONSTRAINT check_event_type CHECK (event_type IN ('view', 'click', 'subscribe', 'impression', 'conversion'))
 );
 
-COMMENT ON TABLE events IS 'User interaction events for CTR/CVR tracking';
-COMMENT ON COLUMN events.event_type IS 'Event type: view, click, subscribe, impression, conversion';
-COMMENT ON COLUMN events.ab_variant IS 'A/B test variant: control, variant_a, variant_b';
-COMMENT ON COLUMN events.metadata IS 'Additional event context (channel, location, device)';
+COMMENT ON TABLE events IS 'Event interaksi pengguna untuk pelacakan CTR/CVR';
+COMMENT ON COLUMN events.event_type IS 'Jenis event: view, click, subscribe, impression, conversion';
+COMMENT ON COLUMN events.ab_variant IS 'Varian A/B test: control, variant_a, variant_b';
+COMMENT ON COLUMN events.metadata IS 'Konteks tambahan event (channel, lokasi, perangkat)';
 
 -- ==============================================
 -- FEATURE STORE
 -- ==============================================
 
--- User features table (pre-computed features)
+-- Tabel user_features (fitur yang sudah dihitung sebelumnya)
 CREATE TABLE IF NOT EXISTS user_features (
     user_id UUID PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
     recency INTEGER NOT NULL DEFAULT 0,
@@ -124,19 +124,19 @@ CREATE TABLE IF NOT EXISTS user_features (
     CONSTRAINT check_product_diversity CHECK (product_diversity_score >= 0 AND product_diversity_score <= 1)
 );
 
-COMMENT ON TABLE user_features IS 'Pre-computed user features for real-time inference';
-COMMENT ON COLUMN user_features.recency IS 'Days since last purchase';
-COMMENT ON COLUMN user_features.frequency IS 'Total number of purchases';
-COMMENT ON COLUMN user_features.monetary IS 'Total revenue from user';
-COMMENT ON COLUMN user_features.arpu_bucket IS 'ARPU segment: low, medium, high, premium';
-COMMENT ON COLUMN user_features.churn_score IS 'Churn probability (0-1)';
-COMMENT ON COLUMN user_features.rfm_score IS 'RFM score (e.g., 555, 111)';
+COMMENT ON TABLE user_features IS 'Fitur pengguna yang sudah dihitung untuk inferensi real-time';
+COMMENT ON COLUMN user_features.recency IS 'Jumlah hari sejak pembelian terakhir';
+COMMENT ON COLUMN user_features.frequency IS 'Total jumlah pembelian';
+COMMENT ON COLUMN user_features.monetary IS 'Total pendapatan dari pengguna';
+COMMENT ON COLUMN user_features.arpu_bucket IS 'Segmen ARPU: low, medium, high, premium';
+COMMENT ON COLUMN user_features.churn_score IS 'Probabilitas churn (0-1)';
+COMMENT ON COLUMN user_features.rfm_score IS 'Skor RFM (contoh: 555, 111)';
 
 -- ==============================================
--- STREAMING DATA TRACKING
+-- PELACAKAN DATA STREAMING
 -- ==============================================
 
--- Ingestion batches tracking (for streaming data)
+-- Tabel ingestion_batches (pelacakan batch data streaming)
 CREATE TABLE IF NOT EXISTS ingestion_batches (
     batch_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     batch_start_time TIMESTAMP NOT NULL,
@@ -153,30 +153,30 @@ CREATE TABLE IF NOT EXISTS ingestion_batches (
     CONSTRAINT check_status CHECK (status IN ('running', 'completed', 'failed', 'partial'))
 );
 
-COMMENT ON TABLE ingestion_batches IS 'Track streaming data ingestion batches';
-COMMENT ON COLUMN ingestion_batches.status IS 'Batch status: running, completed, failed, partial';
+COMMENT ON TABLE ingestion_batches IS 'Pelacakan batch ingesti data streaming';
+COMMENT ON COLUMN ingestion_batches.status IS 'Status batch: running, completed, failed, partial';
 
 -- ==============================================
--- INDEXES FOR PERFORMANCE
+-- INDEX UNTUK PERFORMA
 -- ==============================================
 
--- Users indexes
+-- Index tabel users
 CREATE INDEX IF NOT EXISTS idx_users_segment ON users(segment_id) WHERE segment_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_users_registration ON users(registration_date);
 
--- Products indexes
+-- Index tabel products
 CREATE INDEX IF NOT EXISTS idx_products_family ON products(product_family) WHERE is_active = TRUE;
 CREATE INDEX IF NOT EXISTS idx_products_active ON products(is_active);
 CREATE INDEX IF NOT EXISTS idx_products_tags ON products USING GIN(tags);
 
--- Transactions indexes
+-- Index tabel transactions
 CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_product ON transactions(product_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON transactions(user_id, transaction_date DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
 
--- Events indexes
+-- Index tabel events
 CREATE INDEX IF NOT EXISTS idx_events_user ON events(user_id);
 CREATE INDEX IF NOT EXISTS idx_events_product ON events(product_id);
 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp DESC);
@@ -185,21 +185,21 @@ CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
 CREATE INDEX IF NOT EXISTS idx_events_variant ON events(ab_variant) WHERE ab_variant IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_events_user_product ON events(user_id, product_id, event_type);
 
--- User features indexes
+-- Index tabel user_features
 CREATE INDEX IF NOT EXISTS idx_user_features_segment ON user_features(segment_id) WHERE segment_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_user_features_arpu ON user_features(arpu_bucket);
 CREATE INDEX IF NOT EXISTS idx_user_features_updated ON user_features(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_user_features_rfm ON user_features(rfm_score) WHERE rfm_score IS NOT NULL;
 
--- Ingestion batches indexes
+-- Index tabel ingestion_batches
 CREATE INDEX IF NOT EXISTS idx_ingestion_status ON ingestion_batches(status);
 CREATE INDEX IF NOT EXISTS idx_ingestion_start_time ON ingestion_batches(batch_start_time DESC);
 
 -- ==============================================
--- TRIGGERS FOR AUTO-UPDATE TIMESTAMPS
+-- TRIGGER UNTUK AUTO-UPDATE TIMESTAMP
 -- ==============================================
 
--- Function to update updated_at timestamp
+-- Fungsi untuk memperbarui kolom updated_at secara otomatis
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -208,7 +208,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Apply trigger to tables with updated_at column
+-- Pasang trigger ke tabel yang memiliki kolom updated_at
 CREATE TRIGGER update_users_updated_at
     BEFORE UPDATE ON users
     FOR EACH ROW
@@ -230,10 +230,10 @@ CREATE TRIGGER update_ingestion_batches_updated_at
     EXECUTE FUNCTION update_updated_at_column();
 
 -- ==============================================
--- INITIAL DATA SEED (OPTIONAL)
+-- DATA AWAL (OPSIONAL)
 -- ==============================================
 
--- Sample products for testing
+-- Contoh produk untuk keperluan testing
 INSERT INTO products (product_id, product_name, product_family, price, quota_data_mb, quota_voice_min, quota_sms, validity_days, tags) VALUES
     ('PKG001', 'Internet Freedom 10GB', 'data', 50000, 10240, 0, 0, 30, ARRAY['data-only', 'youth']),
     ('PKG002', 'Internet Freedom 25GB', 'data', 100000, 25600, 0, 0, 30, ARRAY['data-only', 'premium']),
@@ -246,10 +246,10 @@ INSERT INTO products (product_id, product_name, product_family, price, quota_dat
 ON CONFLICT (product_id) DO NOTHING;
 
 -- ==============================================
--- VIEWS FOR COMMON QUERIES
+-- VIEW UNTUK QUERY UMUM
 -- ==============================================
 
--- View: User summary with latest features
+-- View: Ringkasan pengguna dengan fitur terbaru
 CREATE OR REPLACE VIEW v_user_summary AS
 SELECT
     u.user_id,
@@ -267,9 +267,9 @@ SELECT
 FROM users u
 LEFT JOIN user_features uf ON u.user_id = uf.user_id;
 
-COMMENT ON VIEW v_user_summary IS 'Consolidated user profile with latest features';
+COMMENT ON VIEW v_user_summary IS 'Profil pengguna lengkap dengan fitur terbaru';
 
--- View: Product performance metrics
+-- View: Metrik performa produk
 CREATE OR REPLACE VIEW v_product_metrics AS
 SELECT
     p.product_id,
@@ -289,25 +289,25 @@ LEFT JOIN events e ON p.product_id = e.product_id
 WHERE p.is_active = TRUE
 GROUP BY p.product_id, p.product_name, p.product_family, p.price;
 
-COMMENT ON VIEW v_product_metrics IS 'Product performance KPIs for monitoring';
+COMMENT ON VIEW v_product_metrics IS 'KPI performa produk untuk monitoring';
 
 -- ==============================================
--- GRANTS (FOR APPLICATION USER)
+-- HAK AKSES (UNTUK USER APLIKASI)
 -- ==============================================
 
--- Note: Adjust user name based on your configuration
+-- Catatan: Sesuaikan nama user dengan konfigurasi kamu
 -- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO telco_app_user;
 -- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO telco_app_user;
 
 -- ==============================================
--- COMPLETION MESSAGE
+-- PESAN SELESAI
 -- ==============================================
 
 DO $$
 BEGIN
-    RAISE NOTICE '✅ Database schema initialized successfully';
-    RAISE NOTICE 'Tables created: users, products, transactions, events, user_features, ingestion_batches';
-    RAISE NOTICE 'Indexes created for performance optimization';
-    RAISE NOTICE 'Triggers configured for automatic timestamp updates';
-    RAISE NOTICE 'Sample products seeded for testing';
+    RAISE NOTICE '✅ Skema database berhasil diinisialisasi';
+    RAISE NOTICE 'Tabel dibuat: users, products, transactions, events, user_features, ingestion_batches';
+    RAISE NOTICE 'Index dibuat untuk optimasi performa';
+    RAISE NOTICE 'Trigger dikonfigurasi untuk pembaruan timestamp otomatis';
+    RAISE NOTICE 'Contoh produk sudah dimasukkan untuk testing';
 END $$;
