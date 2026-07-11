@@ -2,7 +2,7 @@ name: telco-recommender-prod
 
 services:
   # PostgreSQL Database with Production Configuration
-  postgres:
+  telco-postgres:
     image: postgres:14-alpine
     container_name: telco-postgres-prod
     env_file:
@@ -48,7 +48,7 @@ services:
       -c max_wal_size=4GB
 
   # Redis Cache with Persistence and Password
-  redis:
+  telco-redis:
     image: redis:7-alpine
     container_name: telco-redis-prod
     env_file:
@@ -88,14 +88,14 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/${DATABASE_NAME}
+      - DATABASE_URL=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@telco-postgres:5432/${DATABASE_NAME}
       - DATA_SOURCE_PATH=/app/ml/data/raw/ac-01_telco_customer_behavior_mock_data.csv
       - BATCH_SIZE=${BATCH_SIZE:-1000}
       - INGESTION_INTERVAL_HOURS=${INGESTION_INTERVAL_HOURS:-4}
       - START_IMMEDIATELY=${START_IMMEDIATELY:-true}
       - REPLAY_MODE=${REPLAY_MODE:-false}
       - USE_CRON=${USE_CRON:-false}
-      - REDIS_HOST=redis
+      - REDIS_HOST=telco-redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - LOG_LEVEL=INFO
@@ -103,9 +103,9 @@ services:
     volumes:
       - ./ml/data/raw:/app/ml/data/raw:ro
     depends_on:
-      postgres:
+      telco-postgres:
         condition: service_healthy
-      redis:
+      telco-redis:
         condition: service_healthy
     networks:
       - dokploy-network
@@ -190,9 +190,9 @@ services:
       - 8.8.8.8
       - 8.8.4.4
     depends_on:
-      postgres:
+      telco-postgres:
         condition: service_healthy
-      redis:
+      telco-redis:
         condition: service_healthy
     networks:
       - dokploy-network
@@ -290,7 +290,7 @@ services:
     env_file:
       - .env
     environment:
-      - BACKEND_STORE_URI=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/mlflow
+      - BACKEND_STORE_URI=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@telco-postgres:5432/mlflow
       - ARTIFACT_ROOT=/mlflow/artifacts
       - MLFLOW_S3_ENDPOINT_URL=${MLFLOW_S3_ENDPOINT_URL:-}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
@@ -305,7 +305,7 @@ services:
     volumes:
       - mlflow_data:/mlflow
     depends_on:
-      postgres:
+      telco-postgres:
         condition: service_healthy
     networks:
       - dokploy-network
@@ -326,7 +326,7 @@ services:
           memory: 512M
     command: >
       mlflow server
-      --backend-store-uri postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/mlflow
+      --backend-store-uri postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@telco-postgres:5432/mlflow
       --serve-artifacts
       --artifacts-destination /mlflow/artifacts
       --host 0.0.0.0
@@ -463,7 +463,7 @@ services:
       - .env
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@telco-postgres:5432/airflow
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY}
@@ -475,7 +475,7 @@ services:
       - airflow_logs:/opt/airflow/logs
       - mlflow_data:/mlflow:ro
     depends_on:
-      postgres:
+      telco-postgres:
         condition: service_healthy
     networks:
       - dokploy-network
@@ -502,13 +502,13 @@ services:
       - .env
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@telco-postgres:5432/airflow
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY}
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - MLFLOW_ARTIFACT_ROOT=mlflow-artifacts:/mlflow/artifacts
       - AIRFLOW__WEBSERVER__BASE_URL=http://airflow-webserver:8080
-      - AIRFLOW_CONN_TELCO_POSTGRES=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/${DATABASE_NAME}
+      - AIRFLOW_CONN_TELCO_POSTGRES=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@telco-postgres:5432/${DATABASE_NAME}
       - AIRFLOW__WEBSERVER__WEB_SERVER_URL=http://airflow-webserver:8080
       - AIRFLOW_CONN_FASTAPI_BACKEND=http://backend:8000
     ports:
@@ -565,15 +565,15 @@ services:
       - .env
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@telco-postgres:5432/airflow
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - MLFLOW_ARTIFACT_ROOT=mlflow-artifacts:/mlflow/artifacts
-      - REDIS_HOST=redis
+      - REDIS_HOST=telco-redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - AIRFLOW__WEBSERVER__BASE_URL=http://airflow-webserver:8080
-      - AIRFLOW_CONN_TELCO_POSTGRES=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/${DATABASE_NAME}
+      - AIRFLOW_CONN_TELCO_POSTGRES=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@telco-postgres:5432/${DATABASE_NAME}
       - AIRFLOW__WEBSERVER__WEB_SERVER_URL=http://airflow-webserver:8080
       - AIRFLOW_CONN_FASTAPI_BACKEND=http://backend:8000
     volumes:
