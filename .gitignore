@@ -123,6 +123,7 @@ prometheus_data/
 .env
 .env.production
 .env.staging
+.env.showcase
 *.pem
 *.key
 *.crt
