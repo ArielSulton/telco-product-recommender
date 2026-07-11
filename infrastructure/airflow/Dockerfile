@@ -2,11 +2,12 @@ FROM apache/airflow:2.8.0-python3.10
 
 USER root
 
-# Install build dependencies for lightfm
+# Install build dependencies for lightfm, plus curl for the webserver healthcheck
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     python3-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 USER airflow

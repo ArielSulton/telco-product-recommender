@@ -6,10 +6,11 @@ FROM python:3.10-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (procps provides `ps`, used by the healthcheck)
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
